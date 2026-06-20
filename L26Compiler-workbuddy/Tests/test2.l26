@@ -1,0 +1,18 @@
+/* 测试用例 2：嵌套作用域 + 集合遮蔽 + union / inter
+   对标 PDF 示例代码2
+   测试覆盖：嵌套块、变量遮蔽、set 赋值、add、write set、外层访问
+*/
+{
+    int x;
+    set s;
+    x = 10;
+    s = {1, 2};
+    {
+        set x;
+        x = {5, 6};
+        add x 7;
+        write x;
+        write s;
+    }
+    write x;
+}

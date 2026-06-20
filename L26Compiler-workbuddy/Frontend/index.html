@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>L26 编译器可视化前端</title>
+    <style>
+        /* ====================================================
+           全局样式 — 简洁清晰，对标参考项目风格
+        ==================================================== */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: "Consolas", "Courier New", monospace;
+            font-size: 14px;
+            background: #1e1e2e;
+            color: #cdd6f4;
+            min-height: 100vh;
+        }
+
+        header {
+            background: #313244;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 2px solid #45475a;
+        }
+        header h1 { font-size: 18px; color: #cba6f7; letter-spacing: 1px; }
+        header span { font-size: 12px; color: #6c7086; }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto 1fr 1fr;
+            gap: 10px;
+            padding: 10px;
+            height: calc(100vh - 56px);
+        }
+
+        /* 面板 */
+        .panel {
+            background: #181825;
+            border: 1px solid #313244;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .panel-title {
+            background: #313244;
+            padding: 6px 14px;
+            font-size: 12px;
+            color: #89b4fa;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .panel-title .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: #89b4fa;
+        }
+        .panel-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        /* 编辑区 */
+        #sourceCode {
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            color: #cdd6f4;
+            border: none;
+            outline: none;
+            resize: none;
+            font-family: inherit;
+            font-size: 14px;
+            line-height: 1.6;
+            tab-size: 4;
+        }
+
+        /* 控制栏 */
+        .controls {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            background: #181825;
+            border: 1px solid #313244;
+            border-radius: 6px;
+        }
+        .btn {
+            padding: 7px 18px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: bold;
+            transition: opacity 0.15s;
+        }
+        .btn:hover { opacity: 0.85; }
+        .btn-primary { background: #89b4fa; color: #1e1e2e; }
+        .btn-green   { background: #a6e3a1; color: #1e1e2e; }
+        .btn-yellow  { background: #f9e2af; color: #1e1e2e; }
+        .btn-red     { background: #f38ba8; color: #1e1e2e; }
+        .btn-purple  { background: #cba6f7; color: #1e1e2e; }
+        .btn-gray    { background: #45475a; color: #cdd6f4; }
+
+        .status-bar {
+            flex: 1;
+            text-align: right;
+            font-size: 12px;
+            color: #6c7086;
+        }
+        #statusMsg { color: #a6e3a1; }
+        #statusMsg.error { color: #f38ba8; }
+
+        /* Token 表 */
+        .token-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .token-table th {
+            background: #313244;
+            padding: 4px 8px;
+            color: #89b4fa;
+            text-align: left;
+            position: sticky;
+            top: 0;
+        }
+        .token-table td {
+            padding: 3px 8px;
+            border-bottom: 1px solid #313244;
+        }
+        .token-table tr:hover td { background: #313244; }
+        .tok-keyword  { color: #cba6f7; }
+        .tok-ident    { color: #89b4fa; }
+        .tok-number   { color: #fab387; }
+        .tok-op       { color: #f38ba8; }
+        .tok-sep      { color: #a6e3a1; }
+
+        /* P-Code 表 */
+        .pcode-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .pcode-table th {
+            background: #313244;
+            padding: 4px 8px;
+            color: #f9e2af;
+            text-align: left;
+            position: sticky;
+            top: 0;
+        }
+        .pcode-table td {
+            padding: 3px 8px;
+            border-bottom: 1px solid #313244;
+        }
+        .pcode-table tr.highlight td { background: #45475a; }
+        .pcode-table tr:hover td { background: #313244; }
+        .addr { color: #6c7086; }
+        .opcode { color: #f9e2af; font-weight: bold; }
+        .operand { color: #fab387; }
+
+        /* 输出面板 */
+        #outputArea {
+            font-size: 13px;
+            line-height: 1.7;
+            white-space: pre-wrap;
+            color: #a6e3a1;
+        }
+        #outputArea .err { color: #f38ba8; }
+
+        /* 语法树 */
+        #astArea {
+            font-size: 12px;
+            line-height: 1.8;
+            white-space: pre;
+            color: #cdd6f4;
+        }
+
+        /* 单步控制栏 */
+        .step-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            padding: 4px 0 8px 0;
+            flex-shrink: 0;
+        }
+        .step-info {
+            font-size: 12px;
+            color: #6c7086;
+        }
+
+        /* 内存面板 */
+        #memoryArea {
+            font-size: 12px;
+            line-height: 1.8;
+        }
+        .mem-scope {
+            margin-bottom: 8px;
+        }
+        .mem-scope-title {
+            color: #cba6f7;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+        .mem-var {
+            display: flex;
+            gap: 10px;
+            padding: 2px 8px;
+        }
+        .mem-var:hover { background: #313244; }
+        .mem-name  { color: #89b4fa; width: 80px; }
+        .mem-type  { color: #6c7086; width: 40px; }
+        .mem-value { color: #a6e3a1; }
+
+        /* 输入弹窗 */
+        #inputOverlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+        #inputOverlay.show { display: flex; }
+        #inputDialog {
+            background: #313244;
+            border-radius: 8px;
+            padding: 24px;
+            min-width: 300px;
+            border: 1px solid #45475a;
+        }
+        #inputDialog h3 { color: #cba6f7; margin-bottom: 12px; }
+        #inputDialog input {
+            width: 100%;
+            padding: 8px;
+            background: #1e1e2e;
+            border: 1px solid #45475a;
+            color: #cdd6f4;
+            border-radius: 4px;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+        #inputDialog input:focus { outline: 2px solid #89b4fa; }
+        .dialog-btns { display: flex; gap: 8px; justify-content: flex-end; }
+
+        /* 滚动条美化 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #181825; }
+        ::-webkit-scrollbar-thumb { background: #45475a; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>🔵 L26 编译器可视化</h1>
+    <span>Coco/R 实现 · 第三组 · 词法 → 语法 → P-Code → 虚拟机</span>
+</header>
+
+<!-- 控制栏 -->
+<div class="layout">
+    <div class="controls">
+        <button class="btn btn-primary" onclick="runCompile()">▶ 编译 + 执行</button>
+        <button class="btn btn-green"  onclick="runCompileOnly()">⚙ 仅编译</button>
+        <button class="btn btn-yellow" onclick="startStep()">⏭ 开始单步</button>
+        <button class="btn btn-purple" id="stepBtn" onclick="stepOnce()" disabled>→ 单步执行</button>
+        <button class="btn btn-gray"   onclick="loadExample(0)">示例1</button>
+        <button class="btn btn-gray"   onclick="loadExample(1)">示例2</button>
+        <button class="btn btn-gray"   onclick="loadExample(2)">示例3</button>
+        <button class="btn btn-red"    onclick="clearAll()">✖ 清空</button>
+        <div class="status-bar"><span id="statusMsg">就绪</span></div>
+    </div>
+
+    <!-- 左上：源代码输入 -->
+    <div class="panel" style="grid-row: 2;">
+        <div class="panel-title"><span class="dot"></span>源代码 (L26)</div>
+        <div class="panel-body" style="padding:0;">
+            <textarea id="sourceCode" spellcheck="false" placeholder="// 在此输入 L26 源程序&#10;{&#10;    int x;&#10;    x = 42;&#10;    write x;&#10;}"></textarea>
+        </div>
+    </div>
+
+    <!-- 右上：Token 列表 -->
+    <div class="panel" style="grid-row: 2;">
+        <div class="panel-title"><span class="dot" style="background:#cba6f7;"></span>Token 列表（词法分析）</div>
+        <div class="panel-body">
+            <table class="token-table" id="tokenTable">
+                <thead><tr><th>#</th><th>类型</th><th>值</th><th>行</th><th>列</th></tr></thead>
+                <tbody id="tokenBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 左下：P-Code + 单步 -->
+    <div class="panel" style="grid-row: 3;">
+        <div class="panel-title"><span class="dot" style="background:#f9e2af;"></span>P-Code 指令序列</div>
+        <div class="step-controls" style="padding: 0 14px;">
+            <span class="step-info" id="stepInfo">PC: —</span>
+            <span class="step-info" id="stackInfo">栈: []</span>
+        </div>
+        <div class="panel-body">
+            <table class="pcode-table" id="pcodeTable">
+                <thead><tr><th>地址</th><th>操作码</th><th>操作数</th><th>备注</th></tr></thead>
+                <tbody id="pcodeBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 右下：输出 + 内存 -->
+    <div class="panel" style="grid-row: 3;">
+        <div class="panel-title"><span class="dot" style="background:#a6e3a1;"></span>运行输出 / 内存状态</div>
+        <div class="panel-body" style="display:flex;flex-direction:column;gap:10px;">
+            <div>
+                <div style="color:#a6e3a1;font-size:11px;margin-bottom:4px;">▍ 程序输出</div>
+                <div id="outputArea">（编译并执行后显示结果）</div>
+            </div>
+            <div>
+                <div style="color:#cba6f7;font-size:11px;margin-bottom:4px;">▍ 内存状态（单步时更新）</div>
+                <div id="memoryArea">（单步执行时显示各帧变量）</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 输入弹窗（模拟 read 语句） -->
+<div id="inputOverlay">
+    <div id="inputDialog">
+        <h3>📥 程序需要输入</h3>
+        <p id="inputPrompt" style="margin-bottom:10px;color:#cdd6f4;font-size:13px;">请输入变量值：</p>
+        <input type="number" id="inputVal" placeholder="输入整数..." />
+        <div class="dialog-btns">
+            <button class="btn btn-primary" onclick="submitInput()">确认</button>
+        </div>
+    </div>
+</div>
+
+<script>
+/* ====================================================
+   L26 前端编译器 + 虚拟机（纯 JavaScript 实现）
+   完整覆盖：词法 → 语法 → P-Code 生成 → VM 执行
+   【参考 ExpressionProject】模块化分层，命名清晰
+==================================================== */
+
+/* ---- 示例程序 ---- */
+const EXAMPLES = [
+/* 示例1 */
+`{
+    int val;
+    set s;
+    s = {1, 2, 3};
+    read val;
+    if (val in s) {
+        add s 10;
+        write val;
+    }
+    while (val > 0) {
+        val = val - 1;
+        write val;
+    }
+    write 999;
+}`,
+/* 示例2 */
+`{
+    int x;
+    set s;
+    x = 10;
+    s = {1, 2};
+    {
+        set x;
+        x = {5, 6};
+        add x 7;
+        write x;
+        write s;
+    }
+    write x;
+}`,
+/* 示例3 */
+`{
+    int a;
+    int b;
+    set s1;
+    set s2;
+    set s3;
+    bool flag;
+
+    a = 5;
+    b = 3;
+    s1 = {1, 2, 3, 4, 5};
+    s2 = {3, 4, 5, 6, 7};
+
+    s3 = s1 union s2;
+    write s3;
+
+    s3 = s1 inter s2;
+    write s3;
+
+    remove s1 3;
+    write s1;
+
+    flag = isempty(s1);
+    write flag;
+
+    if ((a > b) && (a != 0)) {
+        write a;
+    }
+}`
+];
+
+function loadExample(n) {
+    document.getElementById('sourceCode').value = EXAMPLES[n];
+    clearAll(true);
+    setStatus('已加载示例 ' + (n+1), false);
+}
+
+function clearAll(keepSrc) {
+    if (!keepSrc) document.getElementById('sourceCode').value = '';
+    document.getElementById('tokenBody').innerHTML = '';
+    document.getElementById('pcodeBody').innerHTML = '';
+    document.getElementById('outputArea').textContent = '（编译并执行后显示结果）';
+    document.getElementById('memoryArea').textContent = '（单步执行时显示各帧变量）';
+    document.getElementById('stepInfo').textContent = 'PC: —';
+    document.getElementById('stackInfo').textContent = '栈: []';
+    document.getElementById('stepBtn').disabled = true;
+    vmState = null;
+    setStatus('就绪', false);
+}
+
+function setStatus(msg, isErr) {
+    const el = document.getElementById('statusMsg');
+    el.textContent = msg;
+    el.className = isErr ? 'error' : '';
+}
+
+/* ==================================================
+   词法分析器（Lexer）
+================================================== */
+const TK = {
+    EOF:0, IDENT:1, NUMBER:2,
+    // 关键字
+    INT:'int', BOOL:'bool', SET:'set',
+    IF:'if', ELSE:'else', WHILE:'while',
+    WRITE:'write', READ:'read',
+    ADD:'add', REMOVE:'remove',
+    TRUE:'true', FALSE:'false',
+    IN:'in', ISEMPTY:'isempty',
+    UNION:'union', INTER:'inter',
+    // 运算符
+    PLUS:'+', MINUS:'-', STAR:'*', SLASH:'/',
+    ASSIGN:'=', EQ:'==', NE:'!=',
+    LT:'<', LE:'<=', GT:'>', GE:'>=',
+    AND:'&&', OR:'||', NOT:'!',
+    LPAREN:'(', RPAREN:')',
+    LBRACE:'{', RBRACE:'}',
+    SEMI:';', COMMA:','
+};
+
+const KEYWORDS = new Set(['int','bool','set','if','else','while','write','read',
+    'add','remove','true','false','in','isempty','union','inter']);
+
+class Token {
+    constructor(type, val, line, col) {
+        this.type = type; this.val = val;
+        this.line = line; this.col = col;
+    }
+}
+
+class Lexer {
+    constructor(src) {
+        this.src = src; this.pos = 0;
+        this.line = 1; this.col = 1;
+        this.tokens = [];
+    }
+    peek() { return this.pos < this.src.length ? this.src[this.pos] : '\0'; }
+    peek2() { return this.pos+1 < this.src.length ? this.src[this.pos+1] : '\0'; }
+    advance() {
+        const c = this.src[this.pos++];
+        if (c === '\n') { this.line++; this.col = 1; }
+        else this.col++;
+        return c;
+    }
+    skipSpace() {
+        while (this.pos < this.src.length) {
+            const c = this.peek();
+            if (c === ' ' || c === '\t' || c === '\r' || c === '\n') { this.advance(); }
+            else if (c === '/' && this.peek2() === '/') {
+                while (this.pos < this.src.length && this.peek() !== '\n') this.advance();
+            } else if (c === '/' && this.peek2() === '*') {
+                this.advance(); this.advance();
+                while (this.pos < this.src.length) {
+                    if (this.peek() === '*' && this.peek2() === '/') { this.advance(); this.advance(); break; }
+                    this.advance();
+                }
+            } else break;
+        }
+    }
+    tokenize() {
+        while (true) {
+            this.skipSpace();
+            if (this.pos >= this.src.length) { this.tokens.push(new Token(TK.EOF,'EOF',this.line,this.col)); break; }
+            const l = this.line, c = this.col;
+            const ch = this.peek();
+            // 标识符/关键字
+            if (/[a-zA-Z_]/.test(ch)) {
+                let s = '';
+                while (/[a-zA-Z0-9_]/.test(this.peek())) s += this.advance();
+                const typ = KEYWORDS.has(s) ? s : TK.IDENT;
+                this.tokens.push(new Token(typ, s, l, c));
+                continue;
+            }
+            // 数字
+            if (/\d/.test(ch)) {
+                let s = '';
+                while (/\d/.test(this.peek())) s += this.advance();
+                this.tokens.push(new Token(TK.NUMBER, s, l, c));
+                continue;
+            }
+            // 双字符运算符
+            const two = ch + this.peek2();
+            if (two === '==' || two === '!=' || two === '<=' || two === '>=' || two === '&&' || two === '||') {
+                this.advance(); this.advance();
+                this.tokens.push(new Token(two, two, l, c)); continue;
+            }
+            // 单字符
+            this.advance();
+            this.tokens.push(new Token(ch, ch, l, c));
+        }
+        return this.tokens;
+    }
+}
+
+/* ==================================================
+   P-Code 指令功能码（标准 PL/0 三字段：f l a）
+   参考：Pcode.md §一
+================================================== */
+const F = {
+    LIT: 'LIT',   /* LIT 0 a  — 将常数 a 压栈               */
+    OPR: 'OPR',   /* OPR 0 x  — 执行 OPR 子码 x 对应运算    */
+    LOD: 'LOD',   /* LOD l a  — 加载 base(l,b)+a 处变量      */
+    STO: 'STO',   /* STO l a  — 存储到 base(l,b)+a 处        */
+    CAL: 'CAL',   /* CAL l a  — 调用过程（L26 暂不使用）     */
+    INT: 'INT',   /* INT 0 a  — 分配 a 个栈槽（活动记录）    */
+    JMP: 'JMP',   /* JMP 0 a  — 无条件跳转                   */
+    JPC: 'JPC'    /* JPC 0 a  — 弹栈，假（0）则跳转          */
+};
+
+/* OPR 子码（OPR 0 x） */
+const OPR = {
+    RET: 0,        /* 过程/程序返回                           */
+    NEG: 1,        /* 取负                                    */
+    ADD: 2,        /* 加                                      */
+    SUB: 3,        /* 减                                      */
+    MUL: 4,        /* 乘                                      */
+    DIV: 5,        /* 除                                      */
+    MOD: 6,        /* 取模                                    */
+    ODD: 7,        /* 奇数测试                                */
+    EQL: 8,        /* 相等 ==                                 */
+    NEQ: 9,        /* 不等 !=                                 */
+    LSS: 10,       /* 小于 <                                  */
+    LEQ: 11,       /* 小于等于 <=                             */
+    GTR: 12,       /* 大于 >                                  */
+    GEQ: 13,       /* 大于等于 >=                             */
+    WRIT_BOOL: 14, /* 输出布尔                                */
+    WRIT_SET:  15, /* 输出集合                                */
+    READ:      16, /* 读输入压栈                              */
+    WRIT:      17, /* 输出整数                                */
+    /* L26 扩展子码（>= 18） */
+    AND:       18, /* 逻辑与                                  */
+    OR:        19, /* 逻辑或                                  */
+    NOT:       20, /* 逻辑非                                  */
+    LT:        21, /* 小于 <                                  */
+    LE:        22, /* 小于等于 <=                             */
+    GT:        23, /* 大于 >                                  */
+    GE:        24, /* 大于等于 >=                             */
+    NE:        25, /* 不等于 !=                               */
+    /* 集合操作扩展子码（>= 201） */
+    SET_MK:   201, /* 构造集合字面量（弹 a 个元素）           */
+    SET_ADD:  202, /* 集合加元素                              */
+    SET_REM:  203, /* 集合删元素                              */
+    SET_UNI:  204, /* 并集                                    */
+    SET_INT:  205, /* 交集                                    */
+    SET_IN:   206, /* 成员测试                                */
+    SET_EMP:  207, /* 空集测试                                */
+    SET_EQ:   208, /* 集合相等测试                            */
+    WRIT_BOOL:209, /* 输出布尔                                */
+    WRIT_SET: 210, /* 输出集合                                */
+    SET_NE:   211  /* 集合不等测试                            */
+};
+
+const OPR_NAME = {};
+for (const [k,v] of Object.entries(OPR)) OPR_NAME[v] = k;
+
+/* ==================================================
+   语法分析 + 代码生成（递归下降，标准 PL/0 三字段）
+================================================== */
+class Compiler {
+    constructor(tokens) {
+        this.tokens = tokens;
+        this.pos = 0;
+        this.code = [];        /* PInstr[] {f, l, a, cnt?} */
+        this.scopes = [];      /* 符号表栈 */
+        this.errors = [];
+    }
+
+    /* ---- 符号表 ---- */
+    enterScope() { this.scopes.push({}); }
+    leaveScope() { this.scopes.pop(); }
+    curLevel() { return this.scopes.length - 1; }
+
+    declare(name, type) {
+        const top = this.scopes[this.scopes.length - 1];
+        if (top[name] !== undefined) { this.emitError('变量重复声明: ' + name); return false; }
+        /* offset 从 0 开始，访问时 a = offset + 3（跳过三个联系单元） */
+        const offset = Object.keys(top).length;
+        top[name] = { type, offset, level: this.curLevel() };
+        return true;
+    }
+
+    lookup(name) {
+        for (let i = this.scopes.length - 1; i >= 0; --i) {
+            if (this.scopes[i][name] !== undefined)
+                return { ...this.scopes[i][name], level: i };
+        }
+        return null;
+    }
+
+    levelDiff(declLevel) { return this.curLevel() - declLevel; }
+
+    emitError(msg) { this.errors.push(msg); }
+
+    /* ---- Token 操作 ---- */
+    peek() { return this.tokens[this.pos]; }
+    get()  { return this.tokens[this.pos++]; }
+    expect(type) {
+        const t = this.peek();
+        if (t.type !== type) {
+            this.emitError(`第${t.line}行第${t.col}列：期望 "${type}" 但得到 "${t.val}"`);
+            return t;
+        }
+        return this.get();
+    }
+    match(type) { if (this.peek().type === type) { this.get(); return true; } return false; }
+
+    /* ---- P-Code 发射（三字段）---- */
+    emit(f, l, a, cnt) {
+        const idx = this.code.length;
+        /* cnt 用于 SET_MK 记录元素个数，存在 a 字段 */
+        this.code.push({ f, l, a: (a === undefined ? 0 : a), cnt: (cnt || 0), addr: idx });
+        return idx;
+    }
+    patch(idx, addr) { this.code[idx].a = addr; }
+    cur() { return this.code.length; }
+
+    /* ---- 编译入口 ---- */
+    compile() {
+        this.parseBlock();
+        this.emit(F.OPR, 0, OPR.RET);   /* 程序结束 */
+        return this.code;
+    }
+
+    /* block = "{" decls stmts "}" */
+    parseBlock() {
+        this.expect('{');
+        this.enterScope();
+        /* 先预发射 INT，等声明完后回填 a = declCnt + 3 */
+        const intIdx = this.emit(F.INT, 0, 3);  /* 至少 3（三联系单元） */
+        let declCnt = 0;
+        while (['int','bool','set'].includes(this.peek().type)) {
+            this.parseDecl(); declCnt++;
+        }
+        /* 回填 INT 的 a */
+        this.code[intIdx].a = declCnt + 3;
+
+        while (this.peek().type !== '}' && this.peek().type !== TK.EOF) {
+            this.parseStmt();
+        }
+        this.expect('}');
+        this.emit(F.OPR, 0, OPR.RET);  /* 退出 block（同过程返回语义） */
+        this.leaveScope();
+    }
+
+    /* decl = type ident ";" */
+    parseDecl() {
+        const typTok = this.get();
+        const nameTok = this.expect(TK.IDENT);
+        this.expect(';');
+        this.declare(nameTok.val, typTok.type);
+    }
+
+    /* stmt */
+    parseStmt() {
+        const t = this.peek();
+        if (t.type === TK.IDENT) {
+            /* assign */
+            const nameTok = this.get();
+            this.expect('=');
+            const info = this.lookup(nameTok.val);
+            if (!info) { this.emitError('未声明的变量: ' + nameTok.val); }
+            const hint = info ? info.type : 'int';
+            this.parseExpr(hint);
+            if (info) {
+                const ld = this.levelDiff(info.level);
+                this.emit(F.STO, ld, info.offset + 3);
+            }
+            this.expect(';');
+        } else if (t.type === 'if') {
+            this.get();
+            this.expect('(');
+            this.parseBExpr();
+            this.expect(')');
+            const jpc = this.emit(F.JPC, 0, -1);
+            this.parseStmt();
+            const jmp = this.emit(F.JMP, 0, -1);
+            this.patch(jpc, this.cur());
+            if (this.peek().type === 'else') { this.get(); this.parseStmt(); }
+            this.patch(jmp, this.cur());
+        } else if (t.type === 'while') {
+            this.get();
+            const top = this.cur();
+            this.expect('(');
+            this.parseBExpr();
+            this.expect(')');
+            const jpc = this.emit(F.JPC, 0, -1);
+            this.parseStmt();
+            this.emit(F.JMP, 0, top);
+            this.patch(jpc, this.cur());
+        } else if (t.type === 'write') {
+            this.get();
+            const exprType = this.parseExpr('int');
+            if (exprType === 'bool') this.emit(F.OPR, 0, OPR.WRIT_BOOL);
+            else if (exprType === 'set') this.emit(F.OPR, 0, OPR.WRIT_SET);
+            else this.emit(F.OPR, 0, OPR.WRIT);
+            this.expect(';');
+        } else if (t.type === 'read') {
+            this.get();
+            const nameTok = this.expect(TK.IDENT);
+            const info = this.lookup(nameTok.val);
+            this.emit(F.OPR, 0, OPR.READ);   /* 读输入压栈 */
+            if (info) this.emit(F.STO, this.levelDiff(info.level), info.offset + 3);
+            this.expect(';');
+        } else if (t.type === 'add') {
+            this.get();
+            const nameTok = this.expect(TK.IDENT);
+            this.parseAExpr();
+            const info = this.lookup(nameTok.val);
+            if (info) this.emit(F.LOD, this.levelDiff(info.level), info.offset + 3);
+            this.emit(F.OPR, 0, OPR.SET_ADD);
+            if (info) this.emit(F.STO, this.levelDiff(info.level), info.offset + 3);
+            this.expect(';');
+        } else if (t.type === 'remove') {
+            this.get();
+            const nameTok = this.expect(TK.IDENT);
+            this.parseAExpr();
+            const info = this.lookup(nameTok.val);
+            if (info) this.emit(F.LOD, this.levelDiff(info.level), info.offset + 3);
+            this.emit(F.OPR, 0, OPR.SET_REM);
+            if (info) this.emit(F.STO, this.levelDiff(info.level), info.offset + 3);
+            this.expect(';');
+        } else if (t.type === '{') {
+            this.parseBlock();
+        } else {
+            this.emitError(`第${t.line}行：无法识别的语句 "${t.val}"`);
+            this.get();
+        }
+    }
+
+    /* expr：根据上下文提示区分 */
+    parseExpr(hint) {
+        if (this.peek().type === '{') {
+            return this.parseSetExpr();
+        }
+        /* ident union/inter ident */
+        if (this.peek().type === TK.IDENT) {
+            const savedPos = this.pos;
+            const name = this.peek().val;
+            this.pos++;
+            if (this.peek().type === 'union' || this.peek().type === 'inter') {
+                const op = this.get().type;
+                const name2 = this.expect(TK.IDENT).val;
+                const ia = this.lookup(name), ib = this.lookup(name2);
+                if (ia) this.emit(F.LOD, this.levelDiff(ia.level), ia.offset + 3);
+                if (ib) this.emit(F.LOD, this.levelDiff(ib.level), ib.offset + 3);
+                this.emit(F.OPR, 0, op === 'union' ? OPR.SET_UNI : OPR.SET_INT);
+                return 'set';
+            }
+            this.pos = savedPos;
+        }
+        if (hint === 'bool') { this.parseBExpr(); return 'bool'; }
+        this.parseAExpr();
+        return 'int';
+    }
+
+    parseSetExpr() {
+        this.expect('{');
+        let cnt = 0;
+        if (this.peek().type !== '}') {
+            this.parseAExpr(); cnt++;
+            while (this.peek().type === ',') { this.get(); this.parseAExpr(); cnt++; }
+        }
+        this.expect('}');
+        this.emit(F.OPR, 0, OPR.SET_MK, cnt);  /* cnt 存在 code[i].cnt */
+        return 'set';
+    }
+
+    parseAExpr() {
+        this.parseTerm();
+        while (this.peek().type === '+' || this.peek().type === '-') {
+            const op = this.get().type;
+            this.parseTerm();
+            this.emit(F.OPR, 0, op === '+' ? OPR.ADD : OPR.SUB);
+        }
+    }
+
+    parseTerm() {
+        this.parseFactor();
+        while (this.peek().type === '*' || this.peek().type === '/') {
+            const op = this.get().type;
+            this.parseFactor();
+            this.emit(F.OPR, 0, op === '*' ? OPR.MUL : OPR.DIV);
+        }
+    }
+
+    parseFactor() {
+        const t = this.peek();
+        if (t.type === TK.IDENT) {
+            this.get();
+            const info = this.lookup(t.val);
+            if (!info) { this.emitError('未声明的变量: ' + t.val); return; }
+            this.emit(F.LOD, this.levelDiff(info.level), info.offset + 3);
+            this.lastExprType = info.typName;
+        } else if (t.type === TK.NUMBER) {
+            this.get();
+            this.emit(F.LIT, 0, parseInt(t.val));
+            this.lastExprType = 'int';
+        } else if (t.type === '(') {
+            this.get(); this.parseAExpr(); this.expect(')');
+        } else {
+            this.emitError(`第${t.line}行：期望因子，得到 "${t.val}"`);
+            this.get();
+        }
+    }
+
+    parseBExpr() {
+        this.parseBTerm();
+        while (this.peek().type === '||') { this.get(); this.parseBTerm(); this.emit(F.OPR, 0, OPR.OR); }
+    }
+
+    parseBTerm() {
+        this.parseBFactor();
+        while (this.peek().type === '&&') { this.get(); this.parseBFactor(); this.emit(F.OPR, 0, OPR.AND); }
+    }
+
+    parseBFactor() {
+        const t = this.peek();
+        if (t.type === 'true')  { this.get(); this.emit(F.LIT, 0, 1); }
+        else if (t.type === 'false') { this.get(); this.emit(F.LIT, 0, 0); }
+        else if (t.type === '!') { this.get(); this.parseBFactor(); this.emit(F.OPR, 0, OPR.NOT); }
+        else if (t.type === '(') {
+            this.get(); this.parseBExpr(); this.expect(')');
+        }
+        else if (t.type === 'isempty') {
+            this.get(); this.expect('(');
+            const name = this.expect(TK.IDENT).val;
+            this.expect(')');
+            const info = this.lookup(name);
+            if (info) this.emit(F.LOD, this.levelDiff(info.level), info.offset + 3);
+            this.emit(F.OPR, 0, OPR.SET_EMP);
+        }
+        else {
+            /* aexpr ["in" ident | relop aexpr] */
+            this.parseAExpr();
+            if (this.peek().type === 'in') {
+                this.get();
+                const name = this.expect(TK.IDENT).val;
+                const info = this.lookup(name);
+                if (info) this.emit(F.LOD, this.levelDiff(info.level), info.offset + 3);
+                this.emit(F.OPR, 0, OPR.SET_IN);
+            } else {
+                const op = this.peek().type;
+                if (op === '<' || op === '<=' || op === '>' || op === '>=' || op === '==' || op === '!=') {
+                    this.get();
+                    this.parseAExpr();
+                    if (this.lastExprType === 'set') {
+                        if (op === '==') this.emit(F.OPR, 0, OPR.SET_EQ);
+                        else if (op === '!=') this.emit(F.OPR, 0, OPR.SET_NE);
+                        else this.emitError('集合只支持 == 与 !=');
+                    } else {
+                        const relMap = {'<':OPR.LT, '<=':OPR.LE, '>':OPR.GT, '>=':OPR.GE, '==':OPR.EQL, '!=':OPR.NE};
+                        this.emit(F.OPR, 0, relMap[op]);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/* ==================================================
+   虚拟机（标准 PL/0 整型栈 + p/b/t 寄存器）
+   参考：Pcode.md §三 《虚拟机执行》
+================================================== */
+class VM {
+    constructor(code) {
+        this.code = code;
+        this.s = new Array(2048).fill(0);  /* 整型操作数栈 */
+        this.setPool = {};                  /* 集合辅助存储：{栈下标: Set} */
+        this.p = 0;   /* program counter  */
+        this.b = 0;   /* base register    */
+        this.t = -1;  /* top-of-stack     */
+        this.halted = false;
+        this.output = [];
+    }
+
+    /* 静态链追溯：向上 l 层的基址 */
+    base(l, b) {
+        while (l > 0) { b = this.s[b]; l--; }
+        return b;
+    }
+
+    push(v) { this.s[++this.t] = v; }
+    pop()   { return this.s[this.t--]; }
+    top()   { return this.s[this.t]; }
+
+    /* 集合辅助：以栈下标为 key */
+    pushSet(set) {
+        this.t++;
+        this.s[this.t] = 1;          /* 标志位，表示此槽是集合 */
+        this.setPool[this.t] = set;
+    }
+    popSet() {
+        const s = this.setPool[this.t] || new Set();
+        delete this.setPool[this.t];
+        this.t--;
+        return s;
+    }
+    topSet() { return this.setPool[this.t] || new Set(); }
+    getSetAt(idx) { return this.setPool[idx] || new Set(); }
+
+    setStr(s) {
+        const arr = [...s].sort((a,b)=>a-b);
+        return '{' + arr.join(', ') + '}';
+    }
+
+    /* 单步执行 —— 返回 true 表示需要用户输入（read 语句） */
+    async stepAsync() {
+        if (this.halted || this.p >= this.code.length) { this.halted = true; return false; }
+        const ins = this.code[this.p++];
+
+        switch (ins.f) {
+
+        case F.LIT:
+            this.push(ins.a);
+            break;
+
+        case F.OPR:
+            switch (ins.a) {
+            case OPR.RET:
+                /* t = b - 1; p = s[b+2]; b = s[b+1] */
+                this.t = this.b - 1;
+                this.p = this.s[this.b + 2];
+                this.b = this.s[this.b + 1];
+                if (this.p === 0) this.halted = true;   /* 主程序结束 */
+                break;
+            case OPR.NEG: this.s[this.t] = -this.s[this.t]; break;
+            case OPR.ADD: { const b=this.pop(); this.s[this.t] += b; break; }
+            case OPR.SUB: { const b=this.pop(); this.s[this.t] -= b; break; }
+            case OPR.MUL: { const b=this.pop(); this.s[this.t] *= b; break; }
+            case OPR.DIV: {
+                const b=this.pop();
+                if (b===0){ this.output.push('[错误] 除以零'); this.halted=true; break; }
+                this.s[this.t] = Math.trunc(this.s[this.t] / b); break;
+            }
+            case OPR.MOD: { const b=this.pop(); this.s[this.t] %= b; break; }
+            case OPR.ODD: this.s[this.t] = this.s[this.t] & 1; break;
+            case OPR.EQL: { const b=this.pop(); this.s[this.t]=(this.s[this.t]===b)?1:0; break; }
+            case OPR.NEQ: { const b=this.pop(); this.s[this.t]=(this.s[this.t]!==b)?1:0; break; }
+            case OPR.LSS: { const b=this.pop(); this.s[this.t]=(this.s[this.t]< b)?1:0; break; }
+            case OPR.LEQ: { const b=this.pop(); this.s[this.t]=(this.s[this.t]<=b)?1:0; break; }
+            case OPR.GTR: { const b=this.pop(); this.s[this.t]=(this.s[this.t]> b)?1:0; break; }
+            case OPR.GEQ: { const b=this.pop(); this.s[this.t]=(this.s[this.t]>=b)?1:0; break; }
+            case OPR.WRIT_BOOL: this.output.push(this.pop() ? 'true' : 'false'); break;
+            case OPR.WRIT_SET:  this.output.push(this.setStr(this.popSet())); break;
+            case OPR.READ: return true;   /* 需要用户输入 */
+            case OPR.WRIT: this.output.push(String(this.pop())); break;
+            /* L26 扩展 */
+            case OPR.AND: { const b=this.pop(); this.s[this.t]=(this.s[this.t]&&b)?1:0; break; }
+            case OPR.OR:  { const b=this.pop(); this.s[this.t]=(this.s[this.t]||b)?1:0; break; }
+            case OPR.NOT: this.s[this.t] = this.s[this.t]?0:1; break;
+            case OPR.LT:  { const b=this.pop(); this.s[this.t]=(this.s[this.t]< b)?1:0; break; }
+            case OPR.LE:  { const b=this.pop(); this.s[this.t]=(this.s[this.t]<=b)?1:0; break; }
+            case OPR.GT:  { const b=this.pop(); this.s[this.t]=(this.s[this.t]> b)?1:0; break; }
+            case OPR.GE:  { const b=this.pop(); this.s[this.t]=(this.s[this.t]>=b)?1:0; break; }
+            case OPR.NE:  { const b=this.pop(); this.s[this.t]=(this.s[this.t]!==b)?1:0; break; }
+            /* 集合操作 */
+            case OPR.SET_MK: {
+                const cnt = ins.cnt;
+                const elems = [];
+                for (let i = 0; i < cnt; i++) elems.push(this.pop());
+                this.pushSet(new Set(elems));
+                break;
+            }
+            case OPR.SET_ADD: {
+                const s2 = this.popSet();
+                const elem = this.pop();
+                s2.add(elem);
+                this.pushSet(s2);
+                break;
+            }
+            case OPR.SET_REM: {
+                const s2 = this.popSet();
+                const elem = this.pop();
+                s2.delete(elem);
+                this.pushSet(s2);
+                break;
+            }
+            case OPR.SET_UNI: {
+                const sb = this.popSet(), sa = this.popSet();
+                this.pushSet(new Set([...sa, ...sb]));
+                break;
+            }
+            case OPR.SET_INT: {
+                const sb = this.popSet(), sa = this.popSet();
+                this.pushSet(new Set([...sa].filter(x => sb.has(x))));
+                break;
+            }
+            case OPR.SET_IN: {
+                const s2 = this.popSet();
+                const elem = this.pop();
+                this.push(s2.has(elem) ? 1 : 0);
+                break;
+            }
+            case OPR.SET_EMP: {
+                const s2 = this.popSet();
+                this.push(s2.size === 0 ? 1 : 0);
+                break;
+            }
+            case OPR.SET_EQ: {
+                const sb = this.popSet(), sa = this.popSet();
+                const eq = sa.size===sb.size && [...sa].every(x=>sb.has(x));
+                this.push(eq ? 1 : 0);
+                break;
+            }
+            case OPR.SET_NE: {
+                const sb = this.popSet(), sa = this.popSet();
+                const ne = sa.size!==sb.size || ![...sa].every(x=>sb.has(x));
+                this.push(ne ? 1 : 0);
+                break;
+            }
+            default:
+                this.output.push(`[未知 OPR 子码 ${ins.a}]`); this.halted = true;
+            }
+            break;
+
+        case F.LOD: {
+            const addr = this.base(ins.l, this.b) + ins.a;
+            /* 检查是否是集合 */
+            if (this.setPool[addr] !== undefined) {
+                this.pushSet(new Set(this.setPool[addr]));
+            } else {
+                this.push(this.s[addr]);
+            }
+            break;
+        }
+        case F.STO: {
+            const addr = this.base(ins.l, this.b) + ins.a;
+            if (this.setPool[this.t] !== undefined) {
+                /* 存集合 */
+                this.setPool[addr] = this.popSet();
+                this.s[addr] = 1;
+            } else {
+                this.s[addr] = this.pop();
+                delete this.setPool[addr];
+            }
+            break;
+        }
+
+        case F.INT:
+            this.t += ins.a;
+            break;
+
+        case F.JMP:
+            this.p = ins.a;
+            break;
+
+        case F.JPC: {
+            const v = this.pop();
+            if (!v) this.p = ins.a;
+            break;
+        }
+
+        case F.CAL:
+            /* L26 暂不使用过程调用 */
+            this.s[this.t + 1] = this.base(ins.l, this.b);   /* SL */
+            this.s[this.t + 2] = this.b;                       /* DL */
+            this.s[this.t + 3] = this.p;                       /* RA */
+            this.b = this.t + 1;
+            this.p = ins.a;
+            break;
+
+        default:
+            this.output.push(`[未知指令 ${ins.f}]`); this.halted = true;
+        }
+        return false;
+    }
+}
+
+/* ==================================================
+   全局状态
+================================================== */
+let compiledCode = [];
+let allTokens = [];
+let vmState = null;
+
+/* ==================================================
+   编译并展示 Token + P-Code
+================================================== */
+function doCompile(src) {
+    const lexer = new Lexer(src);
+    allTokens = lexer.tokenize();
+
+    // 展示 Token
+    renderTokens(allTokens);
+
+    // 过滤 EOF 后编译
+    const comp = new Compiler(allTokens);
+    compiledCode = comp.compile();
+
+    if (comp.errors.length > 0) {
+        setStatus('编译错误：' + comp.errors[0], true);
+        document.getElementById('outputArea').innerHTML =
+            comp.errors.map(e => `<span class="err">${escHtml(e)}</span>`).join('\n');
+        return false;
+    }
+
+    renderPCode(compiledCode);
+    setStatus(`编译成功 — ${compiledCode.length} 条指令，${allTokens.length} 个 Token`, false);
+    return true;
+}
+
+function runCompileOnly() {
+    const src = document.getElementById('sourceCode').value;
+    if (!src.trim()) { setStatus('请输入源程序', true); return; }
+    document.getElementById('outputArea').textContent = '';
+    document.getElementById('stepBtn').disabled = true;
+    doCompile(src);
+}
+
+async function runCompile() {
+    const src = document.getElementById('sourceCode').value;
+    if (!src.trim()) { setStatus('请输入源程序', true); return; }
+    document.getElementById('outputArea').textContent = '';
+    if (!doCompile(src)) return;
+
+    // 创建 VM 并全速运行
+    vmState = new VM(compiledCode);
+    setStatus('执行中…', false);
+    await runVM(vmState, false);
+    renderOutput(vmState.output);
+    setStatus(`执行完毕 — 共 ${vmState.output.length} 行输出`, false);
+}
+
+async function runVM(vm, stepMode) {
+    while (!vm.halted) {
+        const needInput = await vm.stepAsync();
+        if (needInput) {
+            /* OPR 0 16（READ）：读输入后压栈，再 STO 存入变量 */
+            const val = await promptInput('整数');
+            vm.push(parseInt(val) || 0);
+            /* 继续执行下一条（STO）*/
+        }
+        if (stepMode) break;
+    }
+}
+
+/* 单步模式 */
+function startStep() {
+    const src = document.getElementById('sourceCode').value;
+    if (!src.trim()) { setStatus('请输入源程序', true); return; }
+    document.getElementById('outputArea').textContent = '';
+    if (!doCompile(src)) return;
+
+    vmState = new VM(compiledCode);
+    document.getElementById('stepBtn').disabled = false;
+    highlightPCode(-1);
+    updateStepInfo(vmState);
+    setStatus('单步模式就绪，点击 → 单步执行', false);
+}
+
+async function stepOnce() {
+    if (!vmState || vmState.halted) {
+        setStatus('程序已执行完毕', false);
+        document.getElementById('stepBtn').disabled = true;
+        return;
+    }
+    const prevPc = vmState.p;
+    const needInput = await vmState.stepAsync();
+    if (needInput) {
+        const val = await promptInput('整数');
+        vmState.push(parseInt(val) || 0);
+        /* READ 之后紧跟 STO，不需要额外操作 */
+    }
+    highlightPCode(prevPc);
+    updateStepInfo(vmState);
+    renderOutput(vmState.output);
+    renderMemory(vmState);
+    if (vmState.halted) {
+        setStatus('执行完毕', false);
+        document.getElementById('stepBtn').disabled = true;
+    }
+}
+
+/* ==================================================
+   渲染函数
+================================================== */
+function renderTokens(tokens) {
+    const tbody = document.getElementById('tokenBody');
+    tbody.innerHTML = '';
+    let idx = 0;
+    for (const tok of tokens) {
+        if (tok.type === TK.EOF) break;
+        let cls = 'tok-op';
+        if (KEYWORDS.has(tok.type)) cls = 'tok-keyword';
+        else if (tok.type === TK.IDENT) cls = 'tok-ident';
+        else if (tok.type === TK.NUMBER) cls = 'tok-number';
+        else if ([';',',','(',')','.','{','}'].includes(tok.type)) cls = 'tok-sep';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${idx++}</td><td class="${cls}">${escHtml(String(tok.type))}</td><td>${escHtml(tok.val)}</td><td>${tok.line}</td><td>${tok.col}</td>`;
+        tbody.appendChild(tr);
+    }
+}
+
+function renderPCode(code) {
+    const tbody = document.getElementById('pcodeBody');
+    tbody.innerHTML = '';
+    for (let i = 0; i < code.length; i++) {
+        const ins = code[i];
+        /* 格式：(addr)  f  l  a */
+        let operand = `${ins.l}  ${ins.a}`;
+        /* 对 SET_MK 额外显示 cnt */
+        if (ins.f === F.OPR && ins.a === OPR.SET_MK) operand = `${ins.l}  ${ins.a}  [cnt=${ins.cnt}]`;
+        const notes = getPCodeNote(ins);
+        const tr = document.createElement('tr');
+        tr.id = 'pc_' + i;
+        tr.innerHTML = `<td class="addr">(${i})</td><td class="opcode">${ins.f}</td><td class="operand">${operand}</td><td style="color:#6c7086;font-size:11px;">${notes}</td>`;
+        tbody.appendChild(tr);
+    }
+}
+
+function getPCodeNote(ins) {
+    if (ins.f === F.LIT) return `压入常数 ${ins.a}`;
+    if (ins.f === F.INT) return `分配 ${ins.a} 个栈槽（活动记录）`;
+    if (ins.f === F.JMP) return `无条件跳转 → ${ins.a}`;
+    if (ins.f === F.JPC) return `假则跳转 → ${ins.a}`;
+    if (ins.f === F.LOD) return `LOD l=${ins.l} a=${ins.a}，加载变量`;
+    if (ins.f === F.STO) return `STO l=${ins.l} a=${ins.a}，存储变量`;
+    if (ins.f === F.CAL) return `调用过程 a=${ins.a}`;
+    if (ins.f === F.OPR) {
+        const n = OPR_NAME[ins.a] || String(ins.a);
+        const notes = {
+            RET:'程序/过程返回', NEG:'取负', ADD:'加', SUB:'减', MUL:'乘', DIV:'除',
+            MOD:'取模', ODD:'奇数测试',
+            EQL:'相等==', NEQ:'不等!=', LSS:'小于<', LEQ:'小于等于<=', GTR:'大于>', GEQ:'大于等于>=',
+            WRIT_BOOL:'输出布尔', WRIT_SET:'输出集合', READ:'读取输入', WRIT:'输出整数',
+            AND:'逻辑与', OR:'逻辑或', NOT:'逻辑非',
+            LT:'<', LE:'<=', GT:'>', GE:'>=', NE:'!=',
+            SET_MK:`构造集合(${ins.cnt}个元素)`, SET_ADD:'集合加元素', SET_REM:'集合删元素',
+            SET_UNI:'并集', SET_INT:'交集', SET_IN:'成员测试', SET_EMP:'空集测试', SET_EQ:'集合相等', SET_NE:'集合不等'
+        };
+        return `OPR.${n}：${notes[n]||''}`;
+    }
+    return '';
+}
+
+function highlightPCode(pc) {
+    document.querySelectorAll('#pcodeBody tr').forEach(tr => tr.classList.remove('highlight'));
+    if (pc >= 0) {
+        const el = document.getElementById('pc_' + pc);
+        if (el) { el.classList.add('highlight'); el.scrollIntoView({block:'nearest'}); }
+    }
+}
+
+function updateStepInfo(vm) {
+    document.getElementById('stepInfo').textContent = `PC: ${vm.p}  b: ${vm.b}  t: ${vm.t}`;
+    /* 显示栈顶最多 6 个元素 */
+    const items = [];
+    for (let i = Math.max(0, vm.t - 5); i <= vm.t; i++) {
+        if (vm.setPool[i] !== undefined)
+            items.push('{' + [...vm.setPool[i]].sort((a,b)=>a-b).join(',') + '}');
+        else
+            items.push(String(vm.s[i]));
+    }
+    document.getElementById('stackInfo').textContent = `栈顶: [${items.join(', ')}]`;
+}
+
+function renderOutput(output) {
+    const el = document.getElementById('outputArea');
+    if (output.length === 0) { el.textContent = '（无输出）'; return; }
+    el.textContent = output.join('\n');
+}
+
+function renderMemory(vm) {
+    const el = document.getElementById('memoryArea');
+    el.innerHTML = '';
+    /* 显示当前活动记录（b 基址处）*/
+    if (vm.t < 0) { el.textContent = '（栈为空）'; return; }
+    let html = `<div class="mem-scope"><div class="mem-scope-title">当前帧 b=${vm.b}, t=${vm.t}</div>`;
+    html += `<div class="mem-var"><span class="mem-name">SL</span><span class="mem-type">link</span><span class="mem-value">${vm.s[vm.b]}</span></div>`;
+    html += `<div class="mem-var"><span class="mem-name">DL</span><span class="mem-type">link</span><span class="mem-value">${vm.s[vm.b+1]}</span></div>`;
+    html += `<div class="mem-var"><span class="mem-name">RA</span><span class="mem-type">addr</span><span class="mem-value">${vm.s[vm.b+2]}</span></div>`;
+    for (let i = vm.b + 3; i <= vm.t; i++) {
+        let valStr;
+        if (vm.setPool[i] !== undefined)
+            valStr = '{' + [...vm.setPool[i]].sort((a,b)=>a-b).join(', ') + '}';
+        else
+            valStr = String(vm.s[i]);
+        html += `<div class="mem-var"><span class="mem-name">s[${i}]</span><span class="mem-type">var</span><span class="mem-value">${escHtml(valStr)}</span></div>`;
+    }
+    html += '</div>';
+    el.innerHTML = html;
+}
+
+/* 输入弹窗 */
+let inputResolve = null;
+function promptInput(hint) {
+    return new Promise(resolve => {
+        inputResolve = resolve;
+        document.getElementById('inputPrompt').textContent = `程序执行到 read 语句，请输入整数值：`;
+        document.getElementById('inputVal').value = '';
+        document.getElementById('inputOverlay').classList.add('show');
+        document.getElementById('inputVal').focus();
+    });
+}
+function submitInput() {
+    const val = document.getElementById('inputVal').value.trim();
+    document.getElementById('inputOverlay').classList.remove('show');
+    if (inputResolve) { inputResolve(val); inputResolve = null; }
+}
+document.getElementById('inputVal').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitInput();
+});
+
+function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>

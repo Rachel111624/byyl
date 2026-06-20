@@ -1,0 +1,48 @@
+/* 测试用例 3：集合运算 + bool 表达式 + remove + isempty
+   扩展功能综合测试
+   测试覆盖：union、inter、remove、isempty、bool、!、||、&&、!= 
+*/
+{
+    int a;
+    int b;
+    set s1;
+    set s2;
+    set s3;
+    bool flag;
+
+    a = 5;
+    b = 3;
+    s1 = {1, 2, 3, 4, 5};
+    s2 = {3, 4, 5, 6, 7};
+
+    /* 并集 */
+    s3 = s1 union s2;
+    write s3;
+
+    /* 交集 */
+    s3 = s1 inter s2;
+    write s3;
+
+    /* remove */
+    remove s1 3;
+    write s1;
+
+    /* isempty */
+    flag = isempty(s1);
+    write flag;
+
+    /* 逻辑与关系运算 */
+    if ((a > b) && (a != 0)) {
+        write a;
+    }
+
+    /* while + remove 直到空 */
+    while (!isempty(s2)) {
+        remove s2 3;
+        remove s2 4;
+        remove s2 5;
+        remove s2 6;
+        remove s2 7;
+    }
+    write s2;
+}

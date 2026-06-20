@@ -1,0 +1,577 @@
+/*-------------------------------------------------------------------------
+  L26.atg  —  Coco/R ATG 文法文件
+  L26 语言编译器（第三组：Coco/R 实现）
+  生成：Scanner.cpp / Scanner.h / Parser.cpp / Parser.h
+  P-Code 格式：f l a（对标 Pcode.md 三字段标准）
+
+  compile with:
+    coco.exe L26.atg -namespace L26Project
+-------------------------------------------------------------------------*/
+
+COMPILER L26
+
+$namespace=L26Project
+
+    /* 符号表（支持嵌套作用域，记录层次 level + 偏移 offset）*/
+    SymTab   symTab;
+    /* P-Code 生成器（三字段 f l a 格式）*/
+    PCodeGen pcode;
+
+    /* Coco/R C++ 版专有：由构造函数自动调用 */
+    void Init() {
+        symTab.Init();
+        pcode.Init();
+    }
+
+    /* 语义错误辅助 */
+    void SemError(const wchar_t *msg) { SemErr(msg); }
+
+    /* wchar_t* -> std::string */
+    std::string ws2s(const wchar_t *w) {
+        if (!w) return "";
+        char buf[256];
+        int n = (int)wcslen(w);
+        for (int i = 0; i < n && i < 255; ++i) buf[i] = (char)w[i];
+        buf[n < 255 ? n : 255] = '\0';
+        return std::string(buf);
+    }
+
+    /* 计算层次差：当前层(curLevel) - 定义层(defLevel) */
+    int LevelDiff(int defLevel) {
+        return symTab.curLevel - defLevel;
+    }
+
+    /* ==========================================================
+       真实 token 编号 (从 Parser.cpp 生成代码提取)：
+        1=_ident 2=_number  3="{"   4="}"   5=";"   6="int"
+        7="bool" 8="set"     9="="  10="if" 11="("  12=")"
+       13="else" 14="while" 15="write" 16="read" 17="add" 18="remove"
+       19="<"  20="<="      21=">"   22=">="  23="=="  24="!="
+       25="in"
+       26="||"  27="&&"     28="true" 29="false" 30="!"
+       31="+"   32="-"      33="*"   34="/"   35=","   36="union"
+       37="inter" 38="isempty"
+       ========================================================== */
+
+    /* 前瞻谓词：是否是集合表达式起始
+         "{"          → 集合字面量
+         ident 且 la->next 是 "union"(35) 或 "inter"(36)
+                      → 集合运算（s union t）
+     */
+    bool IsSetExprStart() {
+        if (la->kind == 3) return true;
+        if (la->kind == _ident && la->next != NULL) {
+            int nk = la->next->kind;
+            if (nk == 36 || nk == 37) return true;
+        }
+        return false;
+    }
+
+    /* 前瞻谓词：AExpr 是否能以此 token 开头
+        只有纯粹的算术表达式开头才会返回 true
+        如果 la 是 ident 且 la->next 使表达式变为 bool/set，
+        则不算纯 AExpr 开头，应走 BExpr/SetExpr 分支
+        正确 FIRST(AExpr) = { _ident(1), _number(2), "-"(26), "(" (11) }
+     */
+    bool IsAExprStart() {
+        int k = la->kind;
+        if (!(k == _ident || k == _number || k == 32 /* "-" */ || k == 11 /* "(" */))
+            return false;
+        /* 检查 la->next：若使表达式变为 bool/set，则不算纯 AExpr */
+        if (la->next != NULL) {
+            int nk = la->next->kind;
+            /* "in"(37) "union"(35) "inter"(36) "&&"(30) "||"(29) */
+            if (nk == 25 || nk == 36 || nk == 37 || nk == 27 || nk == 26)
+                return false;
+        }
+        return true;
+    }
+
+    /* 前瞻谓词：是否是 bool 表达式起始
+         "true"(31) / "false"(32) / "!"(33) → 直接返回 true
+         AExpr 且 la->next 是关系运算符或 "in"   → 返回 bool
+     */
+    bool IsBExprOnly() {
+        int k = la->kind;
+        /* true / false / ! */
+        if (k == 28 || k == 29 || k == 30) return true;
+        /* AExpr 后接关系运算符或 "in" → 关系表达式/成员测试 */
+        if (k == _ident || k == _number || k == 32 || k == 11) {
+            if (la->next != NULL) {
+                int nk = la->next->kind;
+                /* 关系运算符: 19-24, 或 "in": 25 */
+                if ((nk >= 19 && nk <= 24) || nk == 25) return true;
+            }
+        }
+        return false;
+    }
+
+    /* 前瞻谓词：是否是集合成员测试起始
+         "isempty"(38) 直接匹配
+         AExpr "in" ident → la 能启动 AExpr 且 la->next 是 "in"(25)
+     */
+    bool IsSetTest() {
+        if (la->kind == 38) return true;
+        int k = la->kind;
+        if (k == _ident || k == _number || k == 32 || k == 11) {
+            if (la->next != NULL && la->next->kind == 25) return true;
+        }
+        return false;
+    }
+
+/*==============================================================
+  CHARACTERS
+==============================================================*/
+CHARACTERS
+    letter    = 'A'..'Z' + 'a'..'z' + '_'.
+    digit     = '0'..'9'.
+    cr        = '\r'.
+    lf        = '\n'.
+    tab       = '\t'.
+
+/*==============================================================
+  TOKENS
+==============================================================*/
+TOKENS
+    ident     = letter { letter | digit }.
+    number    = digit  { digit }.
+
+/*==============================================================
+  COMMENTS
+==============================================================*/
+COMMENTS FROM "//" TO lf
+COMMENTS FROM "/*" TO "*/" NESTED
+
+/*==============================================================
+  IGNORE
+==============================================================*/
+IGNORE cr + lf + tab + ' '
+
+/*==============================================================
+  PRODUCTIONS
+==============================================================*/
+
+PRODUCTIONS
+
+/*------------------------------------------------------------
+  顶层程序
+------------------------------------------------------------*/
+L26
+=
+    Block
+    (. pcode.EmitRET(); .)
+    .
+
+/*------------------------------------------------------------
+  块（作用域）
+  进块：INT 0 (局部变量数+3)
+------------------------------------------------------------*/
+Block                          (. int intAddr; int declCnt = 0; .)
+=
+    "{"
+    (. symTab.EnterScope();
+       intAddr = pcode.Emit(F_INT, 0, 0);
+    .)
+    Decls<declCnt>
+    (. pcode.code[intAddr].a = declCnt + 3; .)
+    Stmts
+    "}"
+    (. symTab.LeaveScope(); .)
+    .
+
+/*------------------------------------------------------------
+  声明序列
+------------------------------------------------------------*/
+Decls<int &cnt>
+=
+    { Decl<cnt> }
+    .
+
+/*------------------------------------------------------------
+  单条声明  <type> <ID> ";"
+------------------------------------------------------------*/
+Decl<int &cnt>
+                               (. std::string typName; std::string varName; .)
+=
+    Type<typName>
+    ident                      (. varName = ws2s(t->val);
+                                  if (!symTab.Declare(varName, typName))
+                                      SemError(L"变量重复声明");
+                                  cnt++;
+                               .)
+    ";"
+    .
+
+/*------------------------------------------------------------
+  类型  "int" | "bool" | "set"
+------------------------------------------------------------*/
+Type<std::string &typName>
+=
+    ( "int"   (. typName = "int";  .)
+    | "bool"  (. typName = "bool"; .)
+    | "set"   (. typName = "set"; .)
+    )
+    .
+
+/*------------------------------------------------------------
+  语句序列
+------------------------------------------------------------*/
+Stmts
+=
+    { Stmt }
+    .
+
+/*------------------------------------------------------------
+  语句
+------------------------------------------------------------*/
+Stmt
+=
+    ( AssignStmt
+    | IfStmt
+    | WhileStmt
+    | IOStmt
+    | Block
+    | SetOpStmt
+    )
+    .
+
+/*------------------------------------------------------------
+  赋值语句  <ID> "=" <expr> ";"
+------------------------------------------------------------*/
+AssignStmt                     (. std::string varName; std::string exprType;
+                                  SymEntry *e = NULL; .)
+=
+    ident                      (. varName = ws2s(t->val);
+                                  e = symTab.Lookup(varName);
+                                  if (!e) SemError(L"未声明的变量");
+                               .)
+    "="
+    Expr<exprType>             (. if (e) {
+                                      if (e->typName != exprType)
+                                          SemError(L"赋值类型不匹配");
+                                      pcode.EmitSTO(LevelDiff(e->level),
+                                                    e->offset + 3);
+                                  }
+                               .)
+    ";"
+    .
+
+/*------------------------------------------------------------
+  if 语句
+------------------------------------------------------------*/
+IfStmt                         (. int labelElse, labelEnd; .)
+=
+    "if" "(" BExpr ")"         (. labelElse = pcode.EmitJPC(-1); .)
+    Stmt
+    (. labelEnd = pcode.EmitJMP(-1);
+       pcode.PatchJump(labelElse);
+    .)
+    [ "else" Stmt ]
+    (. pcode.PatchJump(labelEnd); .)
+    .
+
+/*------------------------------------------------------------
+  while 语句
+------------------------------------------------------------*/
+WhileStmt                      (. int labelTop, labelEnd; .)
+=
+    "while"                    (. labelTop = pcode.CurrentAddr(); .)
+    "(" BExpr ")"              (. labelEnd = pcode.EmitJPC(-1); .)
+    Stmt
+    (. pcode.EmitJMP(labelTop);
+       pcode.PatchJump(labelEnd);
+    .)
+    .
+
+/*------------------------------------------------------------
+  输入输出语句
+  write: OPR 0 14   read: OPR 0 16 + STO l a
+------------------------------------------------------------*/
+IOStmt
+                               (. std::string exprType; .)
+=
+    ( "write"  Expr<exprType>  (. pcode.EmitWRITE(exprType);
+                                  pcode.EmitWRITELN();
+                               .)
+      ";"
+    | "read" ident             (. std::string varName = ws2s(t->val);
+                                  SymEntry *e = symTab.Lookup(varName);
+                                  if (!e) SemError(L"未声明的变量");
+                                  pcode.EmitREAD();
+                                  if (e) pcode.EmitSTO(LevelDiff(e->level),
+                                                       e->offset + 3);
+                               .)
+      ";"
+    )
+    .
+
+/*------------------------------------------------------------
+  集合操作语句
+------------------------------------------------------------*/
+SetOpStmt                      (. std::string varName; std::string dummy;
+                                  SymEntry *e = NULL; .)
+=
+    ( "add"    ident           (. varName = ws2s(t->val);
+                                  e = symTab.Lookup(varName);
+                                  if (!e || e->typName != "set")
+                                      SemError(L"add 目标必须是 set 类型");
+                                  if (e) pcode.EmitLOD(LevelDiff(e->level),
+                                                        e->offset + 3);
+                               .)
+               AExpr<dummy>    (. pcode.EmitSetAdd();
+                                  if (e) pcode.EmitSTO(LevelDiff(e->level),
+                                                        e->offset + 3);
+                               .)
+               ";"
+    | "remove" ident           (. varName = ws2s(t->val);
+                                  e = symTab.Lookup(varName);
+                                  if (!e || e->typName != "set")
+                                      SemError(L"remove 目标必须是 set 类型");
+                                  if (e) pcode.EmitLOD(LevelDiff(e->level),
+                                                        e->offset + 3);
+                               .)
+               AExpr<dummy>    (. pcode.EmitSetRemove();
+                                  if (e) pcode.EmitSTO(LevelDiff(e->level),
+                                                        e->offset + 3);
+                               .)
+               ";"
+    )
+    .
+
+/*------------------------------------------------------------
+  通用表达式
+  正确的分支调度（用显式谓词，避免 StartOf 集冲突）：
+    1. IsSetExprStart()  → SetExpr<typ>
+    2. IsAExprStart()    → AExpr<typ> [后接关系运算符/"in" 时升级为 bool]
+    3. 其余（true/false/!/( 开头 + 含 bool 运算符)
+                          → BExpr（bool 表达式）
+------------------------------------------------------------*/
+Expr<std::string &typ>
+= (. std::string dummy; int relOp = 0; std::string prevTyp; .)
+    ( IF (IsSetExprStart())
+        SetExpr<typ>
+    | IF (IsAExprStart())
+        AExpr<typ>
+        /* 检查是否后接关系运算符 → 升级为关系表达式（返回 bool）*/
+        [ ( "<"  (. relOp = 1; .)
+          | "<=" (. relOp = 2; .)
+          | ">"  (. relOp = 3; .)
+          | ">=" (. relOp = 4; .)
+          | "==" (. relOp = 5; .)
+          | "!=" (. relOp = 6; .)
+          )
+          AExpr<dummy>
+          (. prevTyp = typ; typ = "bool";
+             if (prevTyp == "set") {
+                 if (relOp == 5) pcode.EmitSetEQ();
+                 else if (relOp == 6) pcode.EmitSetNE();
+                 else SemError(L"集合只支持 == 与 !=");
+             } else {
+                 pcode.EmitRelOp(relOp);
+             }
+          .)
+        ]
+        /* 检查是否后接 "in" → 集合成员测试（返回 bool）*/
+        [ "in" ident
+          (. typ = "bool";
+             std::string setName = ws2s(t->val);
+             SymEntry *se = symTab.Lookup(setName);
+             if (!se || se->typName != "set")
+                 SemError(L"in 右侧必须是 set");
+             if (se) pcode.EmitLOD(LevelDiff(se->level), se->offset + 3);
+             pcode.EmitSetIn();
+          .)
+        ]
+        /* 检查是否后接 "union" / "inter" → 集合运算（返回 set）
+           注意：此处 la 已经是 AExpr 解析完毕后的下一个 token，
+           不需要 la->next ！ */
+        [ ( "union" ident
+            (. typ = "set";
+               std::string nb = ws2s(t->val);
+               SymEntry *eb = symTab.Lookup(nb);
+               if (!eb || eb->typName != "set")
+                   SemError(L"union 右侧必须是 set");
+               if (eb) pcode.EmitLOD(LevelDiff(eb->level), eb->offset + 3);
+               pcode.EmitSetUnion();
+            .)
+          | "inter" ident
+            (. typ = "set";
+               std::string nb = ws2s(t->val);
+               SymEntry *eb = symTab.Lookup(nb);
+               if (!eb || eb->typName != "set")
+                   SemError(L"inter 右侧必须是 set");
+               if (eb) pcode.EmitLOD(LevelDiff(eb->level), eb->offset + 3);
+               pcode.EmitSetInter();
+            .)
+          )
+        ]
+    | BExpr
+        (. typ = "bool"; .)
+    )
+    .
+
+/*------------------------------------------------------------
+  布尔表达式  OPR 0 19（OR）/ OPR 0 18（AND）
+------------------------------------------------------------*/
+BExpr
+=
+    BTerm
+    { "||" BTerm               (. pcode.EmitBoolOp(2); .)
+    }
+    .
+
+/*------------------------------------------------------------
+  布尔项  OPR 0 18（AND）
+------------------------------------------------------------*/
+BTerm
+=
+    BFactor
+    { "&&" BFactor             (. pcode.EmitBoolOp(1); .)
+    }
+    .
+
+/*------------------------------------------------------------
+  布尔因子
+  将 Rel/SetTest/单独bool变量/isempty 统一到 BFactor：
+    • AExpr + "in" + ident → SetTest
+    • AExpr + relop + AExpr → Rel
+    • AExpr 单独（bool 变量）
+    • "isempty" 特殊 case
+------------------------------------------------------------*/
+BFactor        (. std::string dummy; std::string prevTypBF; int relOp = 0; .)
+=
+    ( "true"                   (. pcode.EmitLIT(1); .)
+    | "false"                  (. pcode.EmitLIT(0); .)
+    | "!" BFactor              (. pcode.EmitBoolNot(); .)
+    | "(" BExpr ")"
+    | "isempty" "(" ident      (. std::string vn = ws2s(t->val);
+                                  SymEntry *e = symTab.Lookup(vn);
+                                  if (!e || e->typName != "set")
+                                      SemError(L"isempty 参数必须是 set");
+                                  if (e) pcode.EmitLOD(LevelDiff(e->level), e->offset + 3);
+                                  pcode.EmitSetIsEmpty();
+                               .)
+      ")"
+    | AExpr<dummy>
+        [ ( "in" ident
+            (. std::string vn2 = ws2s(t->val);
+               SymEntry *e2 = symTab.Lookup(vn2);
+               if (!e2 || e2->typName != "set")
+                   SemError(L"in 右侧必须是 set");
+               if (e2) pcode.EmitLOD(LevelDiff(e2->level), e2->offset + 3);
+               pcode.EmitSetIn();
+            .)
+        | ( "<"  (. relOp = 1; .)
+          | "<=" (. relOp = 2; .)
+          | ">"  (. relOp = 3; .)
+          | ">=" (. relOp = 4; .)
+          | "==" (. relOp = 5; .)
+          | "!=" (. relOp = 6; .)
+          )
+          AExpr<dummy>
+          (. prevTypBF = dummy;
+             if (prevTypBF == "set") {
+                 if (relOp == 5) pcode.EmitSetEQ();
+                 else if (relOp == 6) pcode.EmitSetNE();
+                 else SemError(L"集合只支持 == 与 !=");
+             } else {
+                 pcode.EmitRelOp(relOp);
+             }
+          .)
+        )
+        ]
+    )
+    .
+
+/*------------------------------------------------------------
+  算术表达式
+------------------------------------------------------------*/
+AExpr<std::string &typ>        (. char op; typ = "int"; .)
+=
+    ATerm<typ>
+    { ( "+"  (. op = '+'; .)
+      | "-"  (. op = '-'; .)
+      )
+      ATerm<typ>               (. pcode.EmitBinOp(op); .)
+    }
+    .
+
+/*------------------------------------------------------------
+  算术项
+------------------------------------------------------------*/
+ATerm<std::string &typ>        (. char op; typ = "int"; .)
+=
+    AFactor<typ>
+    { ( "*"  (. op = '*'; .)
+      | "/"  (. op = '/'; .)
+      )
+      AFactor<typ>             (. pcode.EmitBinOp(op); .)
+    }
+    .
+
+/*------------------------------------------------------------
+  算术因子
+  LOD l a（变量）/ LIT 0 a（常量）
+------------------------------------------------------------*/
+AFactor<std::string &typ>      (. typ = "int"; .)
+=
+    ( ident                    (. std::string vn = ws2s(t->val);
+                                  SymEntry *e = symTab.Lookup(vn);
+                                  if (!e) {
+                                      SemError(L"未声明的变量");
+                                  } else {
+                                      typ = e->typName;
+                                      pcode.EmitLOD(LevelDiff(e->level),
+                                                    e->offset + 3);
+                                  }
+                               .)
+    | number                   (. int val = atoi(ws2s(t->val).c_str());
+                                  pcode.EmitLIT(val);
+                                  typ = "int";
+                               .)
+    | "-" AFactor<typ>         (. pcode.EmitNEG(); .)
+    | "(" AExpr<typ> ")"
+    )
+    .
+
+/*------------------------------------------------------------
+  集合字面量表达式
+------------------------------------------------------------*/
+SetExpr<std::string &typ>      (. typ = "set"; int elemCnt = 0;
+                                  std::string na, nb, elemTyp;
+                                  SymEntry *ea, *eb; .)
+=
+    ( "{"
+      [ AExpr<elemTyp>             (. elemCnt++; .)
+        { "," AExpr<elemTyp>       (. elemCnt++; .)
+        }
+      ]
+      "}"                      (. pcode.EmitSetMake(elemCnt); .)
+    | ident                    (. na = ws2s(t->val);
+                                  ea = symTab.Lookup(na);
+                                  if (!ea || ea->typName != "set")
+                                      SemError(L"union/inter 左侧必须是 set");
+                                  if (ea) pcode.EmitLOD(LevelDiff(ea->level),
+                                                        ea->offset + 3);
+                               .)
+      ( "union" ident          (. nb = ws2s(t->val);
+                                  eb = symTab.Lookup(nb);
+                                  if (!eb || eb->typName != "set")
+                                      SemError(L"union 右侧必须是 set");
+                                  if (eb) pcode.EmitLOD(LevelDiff(eb->level),
+                                                        eb->offset + 3);
+                                  pcode.EmitSetUnion();
+                               .)
+      | "inter" ident          (. nb = ws2s(t->val);
+                                  eb = symTab.Lookup(nb);
+                                  if (!eb || eb->typName != "set")
+                                      SemError(L"inter 右侧必须是 set");
+                                  if (eb) pcode.EmitLOD(LevelDiff(eb->level),
+                                                        eb->offset + 3);
+                                  pcode.EmitSetInter();
+                               .)
+      )
+    )
+    .
+
+END L26.

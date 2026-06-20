@@ -1,0 +1,20 @@
+{
+    int x;
+    bool b;
+    set s;
+    set t;
+
+    x = 10;
+    s = {1, 2, 3};
+    t = {4, 5};
+
+    b = x in s;
+    b = isempty(s);
+
+    s = s union t;
+    s = s inter t;
+
+    if (b) x = 0;
+
+    write x;
+}
