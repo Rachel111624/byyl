@@ -182,7 +182,7 @@ private:
 
         /* 集合操作 */
         case OPR_SET_MK: {
-            int cnt = ins.a;   /* EmitSetMake 已将 a 设置为元素个数 */
+            int cnt = ins.l;   /* EmitSetMake 将 cnt 存入 l 字段 */
             if (cnt > MAX_SET_SIZE) {
                 fprintf(stderr, "运行时错误: 集合字面量元素数 %d 超过上限 %d\n", cnt, MAX_SET_SIZE);
                 halted = true; break;

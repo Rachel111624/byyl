@@ -150,8 +150,7 @@ public:
     void EmitREAD()    { Emit(F_OPR, 0, OPR_READ); }
 
     void EmitSetMake(int cnt) {
-        int idx = Emit(F_OPR, 0, OPR_SET_MK);
-        code[idx].a = cnt;
+        Emit(F_OPR, cnt, OPR_SET_MK);  /* l=cnt, a=OPR_SET_MK=201 */
     }
     void EmitSetUnion()   { Emit(F_OPR, 0, OPR_SET_UNION); }
     void EmitSetInter()   { Emit(F_OPR, 0, OPR_SET_INTER); }

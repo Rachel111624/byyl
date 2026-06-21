@@ -17,9 +17,16 @@
 namespace L26Project {
 
 
+struct ErrorEntry {
+	int line, col;
+	std::wstring msg;
+};
+
 class Errors {
 public:
 	int count;			// number of errors detected
+	bool silent;                    // suppress wprintf output (for JSON mode)
+	std::vector<ErrorEntry> errorMsgs;  // stored errors for JSON mode
 
 	Errors();
 	void SynErr(int line, int col, int n);

@@ -712,7 +712,7 @@ Parser::~Parser() {
 }
 
 Errors::Errors() {
-	count = 0;
+	count = 0; silent = false;
 }
 
 void Errors::SynErr(int line, int col, int n) {
@@ -776,13 +776,15 @@ void Errors::SynErr(int line, int col, int n) {
 		}
 		break;
 	}
-	wprintf(L"-- line %d col %d: %ls\n", line, col, s);
+	if (!silent) wprintf(L"-- line %d col %d: %ls\n", line, col, s);
+		errorMsgs.push_back({line, col, std::wstring(s)});
 	coco_string_delete(s);
 	count++;
 }
 
 void Errors::Error(int line, int col, const wchar_t *s) {
-	wprintf(L"-- line %d col %d: %ls\n", line, col, s);
+	if (!silent) wprintf(L"-- line %d col %d: %ls\n", line, col, s);
+		errorMsgs.push_back({line, col, std::wstring(s)});
 	count++;
 }
 

@@ -31,7 +31,7 @@
 
         .layout {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr;
             grid-template-rows: auto 1fr 1fr;
             gap: 10px;
             padding: 10px;
@@ -201,28 +201,64 @@
             color: #6c7086;
         }
 
-        /* 内存面板 */
+        /* 内存栈帧 */
         #memoryArea {
-            font-size: 12px;
-            line-height: 1.8;
+            font-size: 11px;
+            line-height: 1.6;
         }
-        .mem-scope {
+        .stack-frame {
+            background: #1a1b26;
+            border: 1px solid #313244;
+            border-radius: 6px;
             margin-bottom: 8px;
+            overflow: hidden;
         }
-        .mem-scope-title {
-            color: #cba6f7;
-            font-weight: bold;
-            margin-bottom: 2px;
+        .stack-frame.current {
+            border-color: #cba6f7;
+            box-shadow: 0 0 8px rgba(203,166,247,0.15);
         }
-        .mem-var {
+        .frame-header {
+            background: #252636;
+            padding: 5px 10px;
             display: flex;
-            gap: 10px;
-            padding: 2px 8px;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 10px;
+            color: #89b4fa;
+            font-weight: bold;
+            border-bottom: 1px solid #313244;
         }
-        .mem-var:hover { background: #313244; }
-        .mem-name  { color: #89b4fa; width: 80px; }
-        .mem-type  { color: #6c7086; width: 40px; }
-        .mem-value { color: #a6e3a1; }
+        .stack-frame.current .frame-header {
+            background: #2a2538;
+            color: #cba6f7;
+        }
+        .frame-badge {
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #313244;
+            color: #6c7086;
+        }
+        .stack-frame.current .frame-badge {
+            background: #45475a;
+            color: #cba6f7;
+        }
+        .frame-body { padding: 4px 10px 6px 10px; }
+        .frame-row {
+            display: flex;
+            gap: 8px;
+            padding: 2px 6px;
+            border-radius: 2px;
+        }
+        .frame-row:hover { background: #252636; }
+        .frame-row.link { border-left: 2px solid #45475a; margin-left: 8px; }
+        .frame-slot  { color: #6c7086; width: 40px; flex-shrink: 0; }
+        .frame-label { color: #89b4fa; width: 55px; flex-shrink: 0; font-weight: bold; }
+        .frame-label.sl { color: #f9e2af; }
+        .frame-label.dl { color: #f5c2e7; }
+        .frame-label.ra { color: #89b4fa; }
+        .frame-value { color: #a6e3a1; font-family: monospace; word-break: break-all; }
+        .frame-value.set  { color: #fab387; }
 
         /* 输入弹窗 */
         #inputOverlay {
@@ -283,51 +319,51 @@
         <div class="status-bar"><span id="statusMsg">就绪</span></div>
     </div>
 
-    <!-- 左上：源代码输入 -->
-    <div class="panel" style="grid-row: 2;">
+    <!-- 第二行：源代码 | 输出 | 内存栈 -->
+    <div class="panel">
         <div class="panel-title"><span class="dot"></span>源代码 (L26)</div>
         <div class="panel-body" style="padding:0;">
             <textarea id="sourceCode" spellcheck="false" placeholder="// 在此输入 L26 源程序&#10;{&#10;    int x;&#10;    x = 42;&#10;    write x;&#10;}"></textarea>
         </div>
     </div>
 
-    <!-- 右上：Token 列表 -->
-    <div class="panel" style="grid-row: 2;">
-        <div class="panel-title"><span class="dot" style="background:#cba6f7;"></span>Token 列表（词法分析）</div>
+    <div class="panel">
+        <div class="panel-title"><span class="dot" style="background:#a6e3a1;"></span>程序输出</div>
         <div class="panel-body">
-            <table class="token-table" id="tokenTable">
-                <thead><tr><th>#</th><th>类型</th><th>值</th><th>行</th><th>列</th></tr></thead>
-                <tbody id="tokenBody"></tbody>
-            </table>
+            <div id="outputArea">（编译并执行后显示结果）</div>
         </div>
     </div>
 
-    <!-- 左下：P-Code + 单步 -->
-    <div class="panel" style="grid-row: 3;">
-        <div class="panel-title"><span class="dot" style="background:#f9e2af;"></span>P-Code 指令序列</div>
-        <div class="step-controls" style="padding: 0 14px;">
-            <span class="step-info" id="stepInfo">PC: —</span>
-            <span class="step-info" id="stackInfo">栈: []</span>
-        </div>
-        <div class="panel-body">
-            <table class="pcode-table" id="pcodeTable">
-                <thead><tr><th>地址</th><th>操作码</th><th>操作数</th><th>备注</th></tr></thead>
-                <tbody id="pcodeBody"></tbody>
-            </table>
+    <div class="panel">
+        <div class="panel-title"><span class="dot" style="background:#cba6f7;"></span>内存栈（Stack Frames）</div>
+        <div class="panel-body" id="memoryBody">
+            <div id="memoryArea">（单步执行时显示各帧）</div>
         </div>
     </div>
 
-    <!-- 右下：输出 + 内存 -->
-    <div class="panel" style="grid-row: 3;">
-        <div class="panel-title"><span class="dot" style="background:#a6e3a1;"></span>运行输出 / 内存状态</div>
-        <div class="panel-body" style="display:flex;flex-direction:column;gap:10px;">
-            <div>
-                <div style="color:#a6e3a1;font-size:11px;margin-bottom:4px;">▍ 程序输出</div>
-                <div id="outputArea">（编译并执行后显示结果）</div>
+    <!-- 第三行：P-Code | Token（各占一半，min-height:0 防撑开） -->
+    <div style="grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:10px;min-height:0;overflow:hidden">
+        <div class="panel">
+            <div class="panel-title"><span class="dot" style="background:#f9e2af;"></span>P-Code 指令序列</div>
+            <div class="step-controls" style="padding:0 14px;flex-shrink:0;">
+                <span class="step-info" id="stepInfo">PC: —</span>
+                <span class="step-info" id="stackInfo">栈: []</span>
             </div>
-            <div>
-                <div style="color:#cba6f7;font-size:11px;margin-bottom:4px;">▍ 内存状态（单步时更新）</div>
-                <div id="memoryArea">（单步执行时显示各帧变量）</div>
+            <div class="panel-body">
+                <table class="pcode-table" id="pcodeTable">
+                    <thead><tr><th>地址</th><th>操作码</th><th>操作数</th><th>备注</th></tr></thead>
+                    <tbody id="pcodeBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-title"><span class="dot" style="background:#fab387;"></span>Token 列表（词法分析）</div>
+            <div class="panel-body">
+                <table class="token-table" id="tokenTable">
+                    <thead><tr><th>#</th><th>类型</th><th>值</th><th>行</th><th>列</th></tr></thead>
+                    <tbody id="tokenBody"></tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -347,14 +383,16 @@
 
 <script>
 /* ====================================================
-   L26 前端编译器 + 虚拟机（纯 JavaScript 实现）
-   完整覆盖：词法 → 语法 → P-Code 生成 → VM 执行
-   【参考 ExpressionProject】模块化分层，命名清晰
+   L26 前端（词法/语法分析由 C++ 后端完成，前端只负责 UI + VM 单步）
+   后端通过 server.js 桥接调用 l26compiler.exe --json
+   F 码和 OPR 码与后端 PCode.h / VM.h 完全对齐
 ==================================================== */
+
+/* ---- 后端地址 ---- */
+const BACKEND = 'http://localhost:8765/compile';
 
 /* ---- 示例程序 ---- */
 const EXAMPLES = [
-/* 示例1 */
 `{
     int val;
     set s;
@@ -370,7 +408,6 @@ const EXAMPLES = [
     }
     write 999;
 }`,
-/* 示例2 */
 `{
     int x;
     set s;
@@ -385,7 +422,6 @@ const EXAMPLES = [
     }
     write x;
 }`,
-/* 示例3 */
 `{
     int a;
     int b;
@@ -443,637 +479,66 @@ function setStatus(msg, isErr) {
 }
 
 /* ==================================================
-   词法分析器（Lexer）
+   P-Code 指令码（与后端 PCode.h fct 枚举对齐）
+   F: 0=LIT 1=OPR 2=LOD 3=STO 4=CAL 5=INT 6=JMP 7=JPC
 ================================================== */
-const TK = {
-    EOF:0, IDENT:1, NUMBER:2,
-    // 关键字
-    INT:'int', BOOL:'bool', SET:'set',
-    IF:'if', ELSE:'else', WHILE:'while',
-    WRITE:'write', READ:'read',
-    ADD:'add', REMOVE:'remove',
-    TRUE:'true', FALSE:'false',
-    IN:'in', ISEMPTY:'isempty',
-    UNION:'union', INTER:'inter',
-    // 运算符
-    PLUS:'+', MINUS:'-', STAR:'*', SLASH:'/',
-    ASSIGN:'=', EQ:'==', NE:'!=',
-    LT:'<', LE:'<=', GT:'>', GE:'>=',
-    AND:'&&', OR:'||', NOT:'!',
-    LPAREN:'(', RPAREN:')',
-    LBRACE:'{', RBRACE:'}',
-    SEMI:';', COMMA:','
-};
+const F = { LIT:0, OPR:1, LOD:2, STO:3, CAL:4, INT:5, JMP:6, JPC:7 };
+const F_NAME = ['LIT','OPR','LOD','STO','CAL','INT','JMP','JPC'];
 
-const KEYWORDS = new Set(['int','bool','set','if','else','while','write','read',
-    'add','remove','true','false','in','isempty','union','inter']);
-
-class Token {
-    constructor(type, val, line, col) {
-        this.type = type; this.val = val;
-        this.line = line; this.col = col;
-    }
-}
-
-class Lexer {
-    constructor(src) {
-        this.src = src; this.pos = 0;
-        this.line = 1; this.col = 1;
-        this.tokens = [];
-    }
-    peek() { return this.pos < this.src.length ? this.src[this.pos] : '\0'; }
-    peek2() { return this.pos+1 < this.src.length ? this.src[this.pos+1] : '\0'; }
-    advance() {
-        const c = this.src[this.pos++];
-        if (c === '\n') { this.line++; this.col = 1; }
-        else this.col++;
-        return c;
-    }
-    skipSpace() {
-        while (this.pos < this.src.length) {
-            const c = this.peek();
-            if (c === ' ' || c === '\t' || c === '\r' || c === '\n') { this.advance(); }
-            else if (c === '/' && this.peek2() === '/') {
-                while (this.pos < this.src.length && this.peek() !== '\n') this.advance();
-            } else if (c === '/' && this.peek2() === '*') {
-                this.advance(); this.advance();
-                while (this.pos < this.src.length) {
-                    if (this.peek() === '*' && this.peek2() === '/') { this.advance(); this.advance(); break; }
-                    this.advance();
-                }
-            } else break;
-        }
-    }
-    tokenize() {
-        while (true) {
-            this.skipSpace();
-            if (this.pos >= this.src.length) { this.tokens.push(new Token(TK.EOF,'EOF',this.line,this.col)); break; }
-            const l = this.line, c = this.col;
-            const ch = this.peek();
-            // 标识符/关键字
-            if (/[a-zA-Z_]/.test(ch)) {
-                let s = '';
-                while (/[a-zA-Z0-9_]/.test(this.peek())) s += this.advance();
-                const typ = KEYWORDS.has(s) ? s : TK.IDENT;
-                this.tokens.push(new Token(typ, s, l, c));
-                continue;
-            }
-            // 数字
-            if (/\d/.test(ch)) {
-                let s = '';
-                while (/\d/.test(this.peek())) s += this.advance();
-                this.tokens.push(new Token(TK.NUMBER, s, l, c));
-                continue;
-            }
-            // 双字符运算符
-            const two = ch + this.peek2();
-            if (two === '==' || two === '!=' || two === '<=' || two === '>=' || two === '&&' || two === '||') {
-                this.advance(); this.advance();
-                this.tokens.push(new Token(two, two, l, c)); continue;
-            }
-            // 单字符
-            this.advance();
-            this.tokens.push(new Token(ch, ch, l, c));
-        }
-        return this.tokens;
-    }
-}
-
-/* ==================================================
-   P-Code 指令功能码（标准 PL/0 三字段：f l a）
-   参考：Pcode.md §一
-================================================== */
-const F = {
-    LIT: 'LIT',   /* LIT 0 a  — 将常数 a 压栈               */
-    OPR: 'OPR',   /* OPR 0 x  — 执行 OPR 子码 x 对应运算    */
-    LOD: 'LOD',   /* LOD l a  — 加载 base(l,b)+a 处变量      */
-    STO: 'STO',   /* STO l a  — 存储到 base(l,b)+a 处        */
-    CAL: 'CAL',   /* CAL l a  — 调用过程（L26 暂不使用）     */
-    INT: 'INT',   /* INT 0 a  — 分配 a 个栈槽（活动记录）    */
-    JMP: 'JMP',   /* JMP 0 a  — 无条件跳转                   */
-    JPC: 'JPC'    /* JPC 0 a  — 弹栈，假（0）则跳转          */
-};
-
-/* OPR 子码（OPR 0 x） */
+/* OPR 子码（与后端 PCode.h OprCode 枚举完全对齐） */
 const OPR = {
-    RET: 0,        /* 过程/程序返回                           */
-    NEG: 1,        /* 取负                                    */
-    ADD: 2,        /* 加                                      */
-    SUB: 3,        /* 减                                      */
-    MUL: 4,        /* 乘                                      */
-    DIV: 5,        /* 除                                      */
-    MOD: 6,        /* 取模                                    */
-    ODD: 7,        /* 奇数测试                                */
-    EQL: 8,        /* 相等 ==                                 */
-    NEQ: 9,        /* 不等 !=                                 */
-    LSS: 10,       /* 小于 <                                  */
-    LEQ: 11,       /* 小于等于 <=                             */
-    GTR: 12,       /* 大于 >                                  */
-    GEQ: 13,       /* 大于等于 >=                             */
-    WRIT_BOOL: 14, /* 输出布尔                                */
-    WRIT_SET:  15, /* 输出集合                                */
-    READ:      16, /* 读输入压栈                              */
-    WRIT:      17, /* 输出整数                                */
-    /* L26 扩展子码（>= 18） */
-    AND:       18, /* 逻辑与                                  */
-    OR:        19, /* 逻辑或                                  */
-    NOT:       20, /* 逻辑非                                  */
-    LT:        21, /* 小于 <                                  */
-    LE:        22, /* 小于等于 <=                             */
-    GT:        23, /* 大于 >                                  */
-    GE:        24, /* 大于等于 >=                             */
-    NE:        25, /* 不等于 !=                               */
-    /* 集合操作扩展子码（>= 201） */
-    SET_MK:   201, /* 构造集合字面量（弹 a 个元素）           */
-    SET_ADD:  202, /* 集合加元素                              */
-    SET_REM:  203, /* 集合删元素                              */
-    SET_UNI:  204, /* 并集                                    */
-    SET_INT:  205, /* 交集                                    */
-    SET_IN:   206, /* 成员测试                                */
-    SET_EMP:  207, /* 空集测试                                */
-    SET_EQ:   208, /* 集合相等测试                            */
-    WRIT_BOOL:209, /* 输出布尔                                */
-    WRIT_SET: 210, /* 输出集合                                */
-    SET_NE:   211  /* 集合不等测试                            */
+    RET:0, NEG:1, ADD:2, SUB:3, MUL:4, DIV:5, ODD:6,
+    EQ:8, NE:9, LT:10, GE:11, GT:12, LE:13,
+    WRITE:14, WRITELN:15, READ:16,
+    AND:18, OR:19, NOT:20,
+    SET_MK:201, SET_UNION:202, SET_INTER:203,
+    SET_IN:204, SET_ISEMPTY:205, SET_ADD:206, SET_REMOVE:207,
+    SET_EQ:208, WRITE_BOOL:209, WRITE_SET:210, SET_NE:211
 };
 
 const OPR_NAME = {};
 for (const [k,v] of Object.entries(OPR)) OPR_NAME[v] = k;
 
 /* ==================================================
-   语法分析 + 代码生成（递归下降，标准 PL/0 三字段）
-================================================== */
-class Compiler {
-    constructor(tokens) {
-        this.tokens = tokens;
-        this.pos = 0;
-        this.code = [];        /* PInstr[] {f, l, a, cnt?} */
-        this.scopes = [];      /* 符号表栈 */
-        this.errors = [];
-    }
-
-    /* ---- 符号表 ---- */
-    enterScope() { this.scopes.push({}); }
-    leaveScope() { this.scopes.pop(); }
-    curLevel() { return this.scopes.length - 1; }
-
-    declare(name, type) {
-        const top = this.scopes[this.scopes.length - 1];
-        if (top[name] !== undefined) { this.emitError('变量重复声明: ' + name); return false; }
-        /* offset 从 0 开始，访问时 a = offset + 3（跳过三个联系单元） */
-        const offset = Object.keys(top).length;
-        top[name] = { type, offset, level: this.curLevel() };
-        return true;
-    }
-
-    lookup(name) {
-        for (let i = this.scopes.length - 1; i >= 0; --i) {
-            if (this.scopes[i][name] !== undefined)
-                return { ...this.scopes[i][name], level: i };
-        }
-        return null;
-    }
-
-    levelDiff(declLevel) { return this.curLevel() - declLevel; }
-
-    emitError(msg) { this.errors.push(msg); }
-
-    /* ---- Token 操作 ---- */
-    peek() { return this.tokens[this.pos]; }
-    get()  { return this.tokens[this.pos++]; }
-    expect(type) {
-        const t = this.peek();
-        if (t.type !== type) {
-            this.emitError(`第${t.line}行第${t.col}列：期望 "${type}" 但得到 "${t.val}"`);
-            return t;
-        }
-        return this.get();
-    }
-    match(type) { if (this.peek().type === type) { this.get(); return true; } return false; }
-
-    /* ---- P-Code 发射（三字段）---- */
-    emit(f, l, a, cnt) {
-        const idx = this.code.length;
-        /* cnt 用于 SET_MK 记录元素个数，存在 a 字段 */
-        this.code.push({ f, l, a: (a === undefined ? 0 : a), cnt: (cnt || 0), addr: idx });
-        return idx;
-    }
-    patch(idx, addr) { this.code[idx].a = addr; }
-    cur() { return this.code.length; }
-
-    /* ---- 编译入口 ---- */
-    compile() {
-        this.parseBlock();
-        this.emit(F.OPR, 0, OPR.RET);   /* 程序结束 */
-        return this.code;
-    }
-
-    /* block = "{" decls stmts "}" */
-    parseBlock() {
-        this.expect('{');
-        this.enterScope();
-        /* 先预发射 INT，等声明完后回填 a = declCnt + 3 */
-        const intIdx = this.emit(F.INT, 0, 3);  /* 至少 3（三联系单元） */
-        let declCnt = 0;
-        while (['int','bool','set'].includes(this.peek().type)) {
-            this.parseDecl(); declCnt++;
-        }
-        /* 回填 INT 的 a */
-        this.code[intIdx].a = declCnt + 3;
-
-        while (this.peek().type !== '}' && this.peek().type !== TK.EOF) {
-            this.parseStmt();
-        }
-        this.expect('}');
-        this.emit(F.OPR, 0, OPR.RET);  /* 退出 block（同过程返回语义） */
-        this.leaveScope();
-    }
-
-    /* decl = type ident ";" */
-    parseDecl() {
-        const typTok = this.get();
-        const nameTok = this.expect(TK.IDENT);
-        this.expect(';');
-        this.declare(nameTok.val, typTok.type);
-    }
-
-    /* stmt */
-    parseStmt() {
-        const t = this.peek();
-        if (t.type === TK.IDENT) {
-            /* assign */
-            const nameTok = this.get();
-            this.expect('=');
-            const info = this.lookup(nameTok.val);
-            if (!info) { this.emitError('未声明的变量: ' + nameTok.val); }
-            const hint = info ? info.type : 'int';
-            this.parseExpr(hint);
-            if (info) {
-                const ld = this.levelDiff(info.level);
-                this.emit(F.STO, ld, info.offset + 3);
-            }
-            this.expect(';');
-        } else if (t.type === 'if') {
-            this.get();
-            this.expect('(');
-            this.parseBExpr();
-            this.expect(')');
-            const jpc = this.emit(F.JPC, 0, -1);
-            this.parseStmt();
-            const jmp = this.emit(F.JMP, 0, -1);
-            this.patch(jpc, this.cur());
-            if (this.peek().type === 'else') { this.get(); this.parseStmt(); }
-            this.patch(jmp, this.cur());
-        } else if (t.type === 'while') {
-            this.get();
-            const top = this.cur();
-            this.expect('(');
-            this.parseBExpr();
-            this.expect(')');
-            const jpc = this.emit(F.JPC, 0, -1);
-            this.parseStmt();
-            this.emit(F.JMP, 0, top);
-            this.patch(jpc, this.cur());
-        } else if (t.type === 'write') {
-            this.get();
-            const exprType = this.parseExpr('int');
-            if (exprType === 'bool') this.emit(F.OPR, 0, OPR.WRIT_BOOL);
-            else if (exprType === 'set') this.emit(F.OPR, 0, OPR.WRIT_SET);
-            else this.emit(F.OPR, 0, OPR.WRIT);
-            this.expect(';');
-        } else if (t.type === 'read') {
-            this.get();
-            const nameTok = this.expect(TK.IDENT);
-            const info = this.lookup(nameTok.val);
-            this.emit(F.OPR, 0, OPR.READ);   /* 读输入压栈 */
-            if (info) this.emit(F.STO, this.levelDiff(info.level), info.offset + 3);
-            this.expect(';');
-        } else if (t.type === 'add') {
-            this.get();
-            const nameTok = this.expect(TK.IDENT);
-            this.parseAExpr();
-            const info = this.lookup(nameTok.val);
-            if (info) this.emit(F.LOD, this.levelDiff(info.level), info.offset + 3);
-            this.emit(F.OPR, 0, OPR.SET_ADD);
-            if (info) this.emit(F.STO, this.levelDiff(info.level), info.offset + 3);
-            this.expect(';');
-        } else if (t.type === 'remove') {
-            this.get();
-            const nameTok = this.expect(TK.IDENT);
-            this.parseAExpr();
-            const info = this.lookup(nameTok.val);
-            if (info) this.emit(F.LOD, this.levelDiff(info.level), info.offset + 3);
-            this.emit(F.OPR, 0, OPR.SET_REM);
-            if (info) this.emit(F.STO, this.levelDiff(info.level), info.offset + 3);
-            this.expect(';');
-        } else if (t.type === '{') {
-            this.parseBlock();
-        } else {
-            this.emitError(`第${t.line}行：无法识别的语句 "${t.val}"`);
-            this.get();
-        }
-    }
-
-    /* expr：根据上下文提示区分 */
-    parseExpr(hint) {
-        if (this.peek().type === '{') {
-            return this.parseSetExpr();
-        }
-        /* ident union/inter ident */
-        if (this.peek().type === TK.IDENT) {
-            const savedPos = this.pos;
-            const name = this.peek().val;
-            this.pos++;
-            if (this.peek().type === 'union' || this.peek().type === 'inter') {
-                const op = this.get().type;
-                const name2 = this.expect(TK.IDENT).val;
-                const ia = this.lookup(name), ib = this.lookup(name2);
-                if (ia) this.emit(F.LOD, this.levelDiff(ia.level), ia.offset + 3);
-                if (ib) this.emit(F.LOD, this.levelDiff(ib.level), ib.offset + 3);
-                this.emit(F.OPR, 0, op === 'union' ? OPR.SET_UNI : OPR.SET_INT);
-                return 'set';
-            }
-            this.pos = savedPos;
-        }
-        if (hint === 'bool') { this.parseBExpr(); return 'bool'; }
-        this.parseAExpr();
-        return 'int';
-    }
-
-    parseSetExpr() {
-        this.expect('{');
-        let cnt = 0;
-        if (this.peek().type !== '}') {
-            this.parseAExpr(); cnt++;
-            while (this.peek().type === ',') { this.get(); this.parseAExpr(); cnt++; }
-        }
-        this.expect('}');
-        this.emit(F.OPR, 0, OPR.SET_MK, cnt);  /* cnt 存在 code[i].cnt */
-        return 'set';
-    }
-
-    parseAExpr() {
-        this.parseTerm();
-        while (this.peek().type === '+' || this.peek().type === '-') {
-            const op = this.get().type;
-            this.parseTerm();
-            this.emit(F.OPR, 0, op === '+' ? OPR.ADD : OPR.SUB);
-        }
-    }
-
-    parseTerm() {
-        this.parseFactor();
-        while (this.peek().type === '*' || this.peek().type === '/') {
-            const op = this.get().type;
-            this.parseFactor();
-            this.emit(F.OPR, 0, op === '*' ? OPR.MUL : OPR.DIV);
-        }
-    }
-
-    parseFactor() {
-        const t = this.peek();
-        if (t.type === TK.IDENT) {
-            this.get();
-            const info = this.lookup(t.val);
-            if (!info) { this.emitError('未声明的变量: ' + t.val); return; }
-            this.emit(F.LOD, this.levelDiff(info.level), info.offset + 3);
-            this.lastExprType = info.typName;
-        } else if (t.type === TK.NUMBER) {
-            this.get();
-            this.emit(F.LIT, 0, parseInt(t.val));
-            this.lastExprType = 'int';
-        } else if (t.type === '(') {
-            this.get(); this.parseAExpr(); this.expect(')');
-        } else {
-            this.emitError(`第${t.line}行：期望因子，得到 "${t.val}"`);
-            this.get();
-        }
-    }
-
-    parseBExpr() {
-        this.parseBTerm();
-        while (this.peek().type === '||') { this.get(); this.parseBTerm(); this.emit(F.OPR, 0, OPR.OR); }
-    }
-
-    parseBTerm() {
-        this.parseBFactor();
-        while (this.peek().type === '&&') { this.get(); this.parseBFactor(); this.emit(F.OPR, 0, OPR.AND); }
-    }
-
-    parseBFactor() {
-        const t = this.peek();
-        if (t.type === 'true')  { this.get(); this.emit(F.LIT, 0, 1); }
-        else if (t.type === 'false') { this.get(); this.emit(F.LIT, 0, 0); }
-        else if (t.type === '!') { this.get(); this.parseBFactor(); this.emit(F.OPR, 0, OPR.NOT); }
-        else if (t.type === '(') {
-            this.get(); this.parseBExpr(); this.expect(')');
-        }
-        else if (t.type === 'isempty') {
-            this.get(); this.expect('(');
-            const name = this.expect(TK.IDENT).val;
-            this.expect(')');
-            const info = this.lookup(name);
-            if (info) this.emit(F.LOD, this.levelDiff(info.level), info.offset + 3);
-            this.emit(F.OPR, 0, OPR.SET_EMP);
-        }
-        else {
-            /* aexpr ["in" ident | relop aexpr] */
-            this.parseAExpr();
-            if (this.peek().type === 'in') {
-                this.get();
-                const name = this.expect(TK.IDENT).val;
-                const info = this.lookup(name);
-                if (info) this.emit(F.LOD, this.levelDiff(info.level), info.offset + 3);
-                this.emit(F.OPR, 0, OPR.SET_IN);
-            } else {
-                const op = this.peek().type;
-                if (op === '<' || op === '<=' || op === '>' || op === '>=' || op === '==' || op === '!=') {
-                    this.get();
-                    this.parseAExpr();
-                    if (this.lastExprType === 'set') {
-                        if (op === '==') this.emit(F.OPR, 0, OPR.SET_EQ);
-                        else if (op === '!=') this.emit(F.OPR, 0, OPR.SET_NE);
-                        else this.emitError('集合只支持 == 与 !=');
-                    } else {
-                        const relMap = {'<':OPR.LT, '<=':OPR.LE, '>':OPR.GT, '>=':OPR.GE, '==':OPR.EQL, '!=':OPR.NE};
-                        this.emit(F.OPR, 0, relMap[op]);
-                    }
-                }
-            }
-        }
-    }
-}
-
-/* ==================================================
-   虚拟机（标准 PL/0 整型栈 + p/b/t 寄存器）
-   参考：Pcode.md §三 《虚拟机执行》
+   虚拟机（VM）—— 与后端 VM.h 行为对齐
+   P-Code 由后端生成，前端 VM 负责执行 + 单步调试
 ================================================== */
 class VM {
     constructor(code) {
         this.code = code;
-        this.s = new Array(2048).fill(0);  /* 整型操作数栈 */
-        this.setPool = {};                  /* 集合辅助存储：{栈下标: Set} */
-        this.p = 0;   /* program counter  */
-        this.b = 0;   /* base register    */
-        this.t = -1;  /* top-of-stack     */
+        this.s = new Array(2048).fill(0);
+        this.setPool = {};
+        this.p = 0; this.b = 0; this.t = -1;
         this.halted = false;
         this.output = [];
     }
 
-    /* 静态链追溯：向上 l 层的基址 */
-    base(l, b) {
-        while (l > 0) { b = this.s[b]; l--; }
-        return b;
-    }
-
+    base(l, b) { while (l > 0) { b = this.s[b]; l--; } return b; }
     push(v) { this.s[++this.t] = v; }
-    pop()   { return this.s[this.t--]; }
-    top()   { return this.s[this.t]; }
+    pop() { return this.s[this.t--]; }
 
-    /* 集合辅助：以栈下标为 key */
-    pushSet(set) {
-        this.t++;
-        this.s[this.t] = 1;          /* 标志位，表示此槽是集合 */
-        this.setPool[this.t] = set;
-    }
-    popSet() {
-        const s = this.setPool[this.t] || new Set();
-        delete this.setPool[this.t];
-        this.t--;
-        return s;
-    }
-    topSet() { return this.setPool[this.t] || new Set(); }
-    getSetAt(idx) { return this.setPool[idx] || new Set(); }
+    pushSet(set) { this.t++; this.s[this.t] = 1; this.setPool[this.t] = set; }
+    popSet() { const s = this.setPool[this.t] || new Set(); delete this.setPool[this.t]; this.t--; return s; }
 
-    setStr(s) {
-        const arr = [...s].sort((a,b)=>a-b);
-        return '{' + arr.join(', ') + '}';
-    }
+    setStr(s) { return '{' + [...s].sort((a,b)=>a-b).join(', ') + '}'; }
 
-    /* 单步执行 —— 返回 true 表示需要用户输入（read 语句） */
     async stepAsync() {
         if (this.halted || this.p >= this.code.length) { this.halted = true; return false; }
         const ins = this.code[this.p++];
-
         switch (ins.f) {
-
-        case F.LIT:
-            this.push(ins.a);
-            break;
-
-        case F.OPR:
-            switch (ins.a) {
-            case OPR.RET:
-                /* t = b - 1; p = s[b+2]; b = s[b+1] */
-                this.t = this.b - 1;
-                this.p = this.s[this.b + 2];
-                this.b = this.s[this.b + 1];
-                if (this.p === 0) this.halted = true;   /* 主程序结束 */
-                break;
-            case OPR.NEG: this.s[this.t] = -this.s[this.t]; break;
-            case OPR.ADD: { const b=this.pop(); this.s[this.t] += b; break; }
-            case OPR.SUB: { const b=this.pop(); this.s[this.t] -= b; break; }
-            case OPR.MUL: { const b=this.pop(); this.s[this.t] *= b; break; }
-            case OPR.DIV: {
-                const b=this.pop();
-                if (b===0){ this.output.push('[错误] 除以零'); this.halted=true; break; }
-                this.s[this.t] = Math.trunc(this.s[this.t] / b); break;
-            }
-            case OPR.MOD: { const b=this.pop(); this.s[this.t] %= b; break; }
-            case OPR.ODD: this.s[this.t] = this.s[this.t] & 1; break;
-            case OPR.EQL: { const b=this.pop(); this.s[this.t]=(this.s[this.t]===b)?1:0; break; }
-            case OPR.NEQ: { const b=this.pop(); this.s[this.t]=(this.s[this.t]!==b)?1:0; break; }
-            case OPR.LSS: { const b=this.pop(); this.s[this.t]=(this.s[this.t]< b)?1:0; break; }
-            case OPR.LEQ: { const b=this.pop(); this.s[this.t]=(this.s[this.t]<=b)?1:0; break; }
-            case OPR.GTR: { const b=this.pop(); this.s[this.t]=(this.s[this.t]> b)?1:0; break; }
-            case OPR.GEQ: { const b=this.pop(); this.s[this.t]=(this.s[this.t]>=b)?1:0; break; }
-            case OPR.WRIT_BOOL: this.output.push(this.pop() ? 'true' : 'false'); break;
-            case OPR.WRIT_SET:  this.output.push(this.setStr(this.popSet())); break;
-            case OPR.READ: return true;   /* 需要用户输入 */
-            case OPR.WRIT: this.output.push(String(this.pop())); break;
-            /* L26 扩展 */
-            case OPR.AND: { const b=this.pop(); this.s[this.t]=(this.s[this.t]&&b)?1:0; break; }
-            case OPR.OR:  { const b=this.pop(); this.s[this.t]=(this.s[this.t]||b)?1:0; break; }
-            case OPR.NOT: this.s[this.t] = this.s[this.t]?0:1; break;
-            case OPR.LT:  { const b=this.pop(); this.s[this.t]=(this.s[this.t]< b)?1:0; break; }
-            case OPR.LE:  { const b=this.pop(); this.s[this.t]=(this.s[this.t]<=b)?1:0; break; }
-            case OPR.GT:  { const b=this.pop(); this.s[this.t]=(this.s[this.t]> b)?1:0; break; }
-            case OPR.GE:  { const b=this.pop(); this.s[this.t]=(this.s[this.t]>=b)?1:0; break; }
-            case OPR.NE:  { const b=this.pop(); this.s[this.t]=(this.s[this.t]!==b)?1:0; break; }
-            /* 集合操作 */
-            case OPR.SET_MK: {
-                const cnt = ins.cnt;
-                const elems = [];
-                for (let i = 0; i < cnt; i++) elems.push(this.pop());
-                this.pushSet(new Set(elems));
-                break;
-            }
-            case OPR.SET_ADD: {
-                const s2 = this.popSet();
-                const elem = this.pop();
-                s2.add(elem);
-                this.pushSet(s2);
-                break;
-            }
-            case OPR.SET_REM: {
-                const s2 = this.popSet();
-                const elem = this.pop();
-                s2.delete(elem);
-                this.pushSet(s2);
-                break;
-            }
-            case OPR.SET_UNI: {
-                const sb = this.popSet(), sa = this.popSet();
-                this.pushSet(new Set([...sa, ...sb]));
-                break;
-            }
-            case OPR.SET_INT: {
-                const sb = this.popSet(), sa = this.popSet();
-                this.pushSet(new Set([...sa].filter(x => sb.has(x))));
-                break;
-            }
-            case OPR.SET_IN: {
-                const s2 = this.popSet();
-                const elem = this.pop();
-                this.push(s2.has(elem) ? 1 : 0);
-                break;
-            }
-            case OPR.SET_EMP: {
-                const s2 = this.popSet();
-                this.push(s2.size === 0 ? 1 : 0);
-                break;
-            }
-            case OPR.SET_EQ: {
-                const sb = this.popSet(), sa = this.popSet();
-                const eq = sa.size===sb.size && [...sa].every(x=>sb.has(x));
-                this.push(eq ? 1 : 0);
-                break;
-            }
-            case OPR.SET_NE: {
-                const sb = this.popSet(), sa = this.popSet();
-                const ne = sa.size!==sb.size || ![...sa].every(x=>sb.has(x));
-                this.push(ne ? 1 : 0);
-                break;
-            }
-            default:
-                this.output.push(`[未知 OPR 子码 ${ins.a}]`); this.halted = true;
-            }
-            break;
-
+        case F.LIT: this.push(ins.a); break;
+        case F.OPR: return this.execOPR(ins);
         case F.LOD: {
             const addr = this.base(ins.l, this.b) + ins.a;
-            /* 检查是否是集合 */
-            if (this.setPool[addr] !== undefined) {
+            if (this.setPool[addr] !== undefined)
                 this.pushSet(new Set(this.setPool[addr]));
-            } else {
+            else
                 this.push(this.s[addr]);
-            }
             break;
         }
         case F.STO: {
             const addr = this.base(ins.l, this.b) + ins.a;
             if (this.setPool[this.t] !== undefined) {
-                /* 存集合 */
                 this.setPool[addr] = this.popSet();
                 this.s[addr] = 1;
             } else {
@@ -1082,32 +547,96 @@ class VM {
             }
             break;
         }
-
-        case F.INT:
-            this.t += ins.a;
-            break;
-
-        case F.JMP:
-            this.p = ins.a;
-            break;
-
-        case F.JPC: {
-            const v = this.pop();
-            if (!v) this.p = ins.a;
+        case F.INT: this.t += ins.a; break;
+        case F.JMP: this.p = ins.a; break;
+        case F.JPC: { if (!this.pop()) this.p = ins.a; break; }
+        case F.CAL:
+            this.s[this.t+1] = this.base(ins.l, this.b);
+            this.s[this.t+2] = this.b;
+            this.s[this.t+3] = this.p;
+            this.b = this.t+1; this.p = ins.a;
             break;
         }
+        return false;
+    }
 
-        case F.CAL:
-            /* L26 暂不使用过程调用 */
-            this.s[this.t + 1] = this.base(ins.l, this.b);   /* SL */
-            this.s[this.t + 2] = this.b;                       /* DL */
-            this.s[this.t + 3] = this.p;                       /* RA */
-            this.b = this.t + 1;
-            this.p = ins.a;
+    execOPR(ins) {
+        const a = ins.a;
+        switch (a) {
+        case OPR.RET:
+            this.t = this.b - 1;
+            this.p = this.s[this.b+2];
+            this.b = this.s[this.b+1];
+            if (this.p === 0) this.halted = true;
             break;
-
-        default:
-            this.output.push(`[未知指令 ${ins.f}]`); this.halted = true;
+        case OPR.NEG: this.s[this.t] = -this.s[this.t]; break;
+        case OPR.ADD: { const b=this.pop(); this.s[this.t] += b; break; }
+        case OPR.SUB: { const b=this.pop(); this.s[this.t] -= b; break; }
+        case OPR.MUL: { const b=this.pop(); this.s[this.t] *= b; break; }
+        case OPR.DIV: {
+            const b=this.pop();
+            if (b===0) { this.output.push('[错误]除以零'); this.halted=true; break; }
+            this.s[this.t] = Math.trunc(this.s[this.t] / b); break;
+        }
+        case OPR.ODD:  this.s[this.t] = this.s[this.t] & 1; break;
+        case OPR.EQ:   { const b=this.pop(); this.s[this.t]=(this.s[this.t]===b)?1:0; break; }
+        case OPR.NE:   { const b=this.pop(); this.s[this.t]=(this.s[this.t]!==b)?1:0; break; }
+        case OPR.LT:   { const b=this.pop(); this.s[this.t]=(this.s[this.t]< b)?1:0; break; }
+        case OPR.GE:   { const b=this.pop(); this.s[this.t]=(this.s[this.t]>=b)?1:0; break; }
+        case OPR.GT:   { const b=this.pop(); this.s[this.t]=(this.s[this.t]> b)?1:0; break; }
+        case OPR.LE:   { const b=this.pop(); this.s[this.t]=(this.s[this.t]<=b)?1:0; break; }
+        case OPR.WRITE: this.output.push(String(this.pop())); break;
+        case OPR.WRITELN: this.output.push(''); break;
+        case OPR.READ: return true; /* 需要用户输入 */
+        case OPR.AND:  { const b=this.pop(); this.s[this.t]=(this.s[this.t]&&b)?1:0; break; }
+        case OPR.OR:   { const b=this.pop(); this.s[this.t]=(this.s[this.t]||b)?1:0; break; }
+        case OPR.NOT:  this.s[this.t] = this.s[this.t]?0:1; break;
+        case OPR.SET_MK: {
+            const cnt = ins.l || 0;
+            const elems = [];
+            for (let i=0; i<cnt; i++) elems.push(this.pop());
+            this.pushSet(new Set(elems));
+            break;
+        }
+        case OPR.SET_UNION: {
+            const sb=this.popSet(), sa=this.popSet();
+            this.pushSet(new Set([...sa, ...sb]));
+            break;
+        }
+        case OPR.SET_INTER: {
+            const sb=this.popSet(), sa=this.popSet();
+            this.pushSet(new Set([...sa].filter(x=>sb.has(x))));
+            break;
+        }
+        case OPR.SET_IN: {
+            const s2=this.popSet(), elem=this.pop();
+            this.push(s2.has(elem)?1:0);
+            break;
+        }
+        case OPR.SET_ISEMPTY: this.push(this.popSet().size===0?1:0); break;
+        case OPR.SET_ADD: {
+            const s2=this.popSet(), elem=this.pop();
+            s2.add(elem); this.pushSet(s2);
+            break;
+        }
+        case OPR.SET_REMOVE: {
+            const s2=this.popSet(), elem=this.pop();
+            s2.delete(elem); this.pushSet(s2);
+            break;
+        }
+        case OPR.SET_EQ: {
+            const sb=this.popSet(), sa=this.popSet();
+            this.push(sa.size===sb.size && [...sa].every(x=>sb.has(x))?1:0);
+            break;
+        }
+        case OPR.WRITE_BOOL: this.output.push(this.pop()?'true':'false'); break;
+        case OPR.WRITE_SET:  this.output.push(this.setStr(this.popSet())); break;
+        case OPR.SET_NE: {
+            const sb=this.popSet(), sa=this.popSet();
+            this.push(sa.size!==sb.size || ![...sa].every(x=>sb.has(x))?1:0);
+            break;
+        }
+        default: this.output.push('[未知OPR '+a+']'); this.halted=true;
         }
         return false;
     }
@@ -1118,32 +647,48 @@ class VM {
 ================================================== */
 let compiledCode = [];
 let allTokens = [];
+let compileHadErrors = false;
+let savedErrors = [];
+let shownErrors = new Set();
 let vmState = null;
 
 /* ==================================================
-   编译并展示 Token + P-Code
+   调用 C++ 后端编译（通过 server.js 桥接）
 ================================================== */
-function doCompile(src) {
-    const lexer = new Lexer(src);
-    allTokens = lexer.tokenize();
+async function doCompile(src) {
+    try {
+        const resp = await fetch(BACKEND, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source: src })
+        });
+        const data = await resp.json();
 
-    // 展示 Token
-    renderTokens(allTokens);
+        /* 先取 Token 和 P-Code（有错误时后端也返回） */
+        allTokens = data.tokens || [];
+        renderTokens(allTokens);
+        compiledCode = data.pcode || [];
+        renderPCode(compiledCode);
 
-    // 过滤 EOF 后编译
-    const comp = new Compiler(allTokens);
-    compiledCode = comp.compile();
+        /* 错误展示 */
+        savedErrors = data.errors || [];
+        if (savedErrors.length > 0) {
+            compileHadErrors = true;
+            setStatus('编译错误：' + savedErrors[0].msg, true);
+            document.getElementById('outputArea').innerHTML =
+                savedErrors.map(e => `<span class="err">行${e.line}列${e.col}: ${escHtml(e.msg)}</span>`).join('\n');
+            return compiledCode.length > 0;  /* 有 P-Code 仍可单步 */
+        }
 
-    if (comp.errors.length > 0) {
-        setStatus('编译错误：' + comp.errors[0], true);
-        document.getElementById('outputArea').innerHTML =
-            comp.errors.map(e => `<span class="err">${escHtml(e)}</span>`).join('\n');
+        compileHadErrors = false;
+        setStatus(`编译成功 — ${compiledCode.length} 条指令，${allTokens.length} 个 Token`, false);
+        return true;
+    } catch (e) {
+        setStatus('连接后端失败！请先启动 server.js', true);
+        document.getElementById('outputArea').textContent =
+            '无法连接到 ' + BACKEND + '\n请在 Compiler 目录下运行: node server.js';
         return false;
     }
-
-    renderPCode(compiledCode);
-    setStatus(`编译成功 — ${compiledCode.length} 条指令，${allTokens.length} 个 Token`, false);
-    return true;
 }
 
 function runCompileOnly() {
@@ -1158,9 +703,10 @@ async function runCompile() {
     const src = document.getElementById('sourceCode').value;
     if (!src.trim()) { setStatus('请输入源程序', true); return; }
     document.getElementById('outputArea').textContent = '';
-    if (!doCompile(src)) return;
+    const ok = await doCompile(src);
+    if (!ok || !compiledCode.length) return;
+    if (compileHadErrors) { setStatus('有编译错误，已中止执行', true); return; }
 
-    // 创建 VM 并全速运行
     vmState = new VM(compiledCode);
     setStatus('执行中…', false);
     await runVM(vmState, false);
@@ -1172,27 +718,34 @@ async function runVM(vm, stepMode) {
     while (!vm.halted) {
         const needInput = await vm.stepAsync();
         if (needInput) {
-            /* OPR 0 16（READ）：读输入后压栈，再 STO 存入变量 */
             const val = await promptInput('整数');
             vm.push(parseInt(val) || 0);
-            /* 继续执行下一条（STO）*/
         }
         if (stepMode) break;
     }
 }
 
-/* 单步模式 */
-function startStep() {
+/* 单步模式（有编译错误也允许单步，方便定位问题） */
+async function startStep() {
     const src = document.getElementById('sourceCode').value;
     if (!src.trim()) { setStatus('请输入源程序', true); return; }
     document.getElementById('outputArea').textContent = '';
-    if (!doCompile(src)) return;
-
+    const ok = await doCompile(src);
+    if (!compiledCode.length) {
+        setStatus('无 P-Code 可执行', true); return;
+    }
     vmState = new VM(compiledCode);
+    shownErrors.clear();
     document.getElementById('stepBtn').disabled = false;
     highlightPCode(-1);
     updateStepInfo(vmState);
-    setStatus('单步模式就绪，点击 → 单步执行', false);
+    if (compileHadErrors) {
+        document.getElementById('outputArea').innerHTML =
+            '<span style="color:#f9e2af;">⚠ 编译时有错误，单步至对应行时将显示</span>';
+        setStatus('有编译错误，可单步查看', true);
+    } else {
+        setStatus('单步模式就绪，点击 → 单步执行', false);
+    }
 }
 
 async function stepOnce() {
@@ -1206,12 +759,25 @@ async function stepOnce() {
     if (needInput) {
         const val = await promptInput('整数');
         vmState.push(parseInt(val) || 0);
-        /* READ 之后紧跟 STO，不需要额外操作 */
     }
     highlightPCode(prevPc);
     updateStepInfo(vmState);
     renderOutput(vmState.output);
     renderMemory(vmState);
+    /* 检查当前指令是否落在某错误行上（每个错误只显示一次） */
+    if (compileHadErrors && prevPc >= 0 && prevPc < compiledCode.length) {
+        const insLine = compiledCode[prevPc].line || 0;
+        const matched = savedErrors.filter((e, i) => {
+            const key = e.line + ':' + e.msg;
+            return e.line === insLine && !shownErrors.has(key);
+        });
+        if (matched.length > 0) {
+            matched.forEach(e => shownErrors.add(e.line + ':' + e.msg));
+            const out = document.getElementById('outputArea');
+            out.innerHTML += '\n<span style="color:#f38ba8;">▶ 错误行 ' + insLine + '</span>\n' +
+                matched.map(e => '⚠ ' + escHtml(e.msg)).join('\n');
+        }
+    }
     if (vmState.halted) {
         setStatus('执行完毕', false);
         document.getElementById('stepBtn').disabled = true;
@@ -1224,18 +790,16 @@ async function stepOnce() {
 function renderTokens(tokens) {
     const tbody = document.getElementById('tokenBody');
     tbody.innerHTML = '';
-    let idx = 0;
-    for (const tok of tokens) {
-        if (tok.type === TK.EOF) break;
+    tokens.forEach((tok, idx) => {
         let cls = 'tok-op';
-        if (KEYWORDS.has(tok.type)) cls = 'tok-keyword';
-        else if (tok.type === TK.IDENT) cls = 'tok-ident';
-        else if (tok.type === TK.NUMBER) cls = 'tok-number';
-        else if ([';',',','(',')','.','{','}'].includes(tok.type)) cls = 'tok-sep';
+        if (['int','bool','set','if','else','while','write','read','add','remove','true','false','in','isempty','union','inter'].includes(tok.type)) cls = 'tok-keyword';
+        else if (tok.type === 'ident') cls = 'tok-ident';
+        else if (tok.type === 'number') cls = 'tok-number';
+        else if ([';',',','(',')','{','}'].includes(tok.type)) cls = 'tok-sep';
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${idx++}</td><td class="${cls}">${escHtml(String(tok.type))}</td><td>${escHtml(tok.val)}</td><td>${tok.line}</td><td>${tok.col}</td>`;
+        tr.innerHTML = `<td>${idx}</td><td class="${cls}">${escHtml(tok.type)}</td><td>${escHtml(tok.val)}</td><td>${tok.line}</td><td>${tok.col}</td>`;
         tbody.appendChild(tr);
-    }
+    });
 }
 
 function renderPCode(code) {
@@ -1243,37 +807,32 @@ function renderPCode(code) {
     tbody.innerHTML = '';
     for (let i = 0; i < code.length; i++) {
         const ins = code[i];
-        /* 格式：(addr)  f  l  a */
         let operand = `${ins.l}  ${ins.a}`;
-        /* 对 SET_MK 额外显示 cnt */
-        if (ins.f === F.OPR && ins.a === OPR.SET_MK) operand = `${ins.l}  ${ins.a}  [cnt=${ins.cnt}]`;
         const notes = getPCodeNote(ins);
         const tr = document.createElement('tr');
         tr.id = 'pc_' + i;
-        tr.innerHTML = `<td class="addr">(${i})</td><td class="opcode">${ins.f}</td><td class="operand">${operand}</td><td style="color:#6c7086;font-size:11px;">${notes}</td>`;
+        tr.innerHTML = `<td class="addr">(${i})</td><td class="opcode">${F_NAME[ins.f]||'?'}</td><td class="operand">${operand}</td><td style="color:#6c7086;font-size:11px;">${notes}</td>`;
         tbody.appendChild(tr);
     }
 }
 
 function getPCodeNote(ins) {
     if (ins.f === F.LIT) return `压入常数 ${ins.a}`;
-    if (ins.f === F.INT) return `分配 ${ins.a} 个栈槽（活动记录）`;
+    if (ins.f === F.INT) return `分配 ${ins.a} 个栈槽`;
     if (ins.f === F.JMP) return `无条件跳转 → ${ins.a}`;
     if (ins.f === F.JPC) return `假则跳转 → ${ins.a}`;
-    if (ins.f === F.LOD) return `LOD l=${ins.l} a=${ins.a}，加载变量`;
-    if (ins.f === F.STO) return `STO l=${ins.l} a=${ins.a}，存储变量`;
-    if (ins.f === F.CAL) return `调用过程 a=${ins.a}`;
+    if (ins.f === F.LOD) return `加载变量 [${ins.l},${ins.a}]`;
+    if (ins.f === F.STO) return `存入变量 [${ins.l},${ins.a}]`;
     if (ins.f === F.OPR) {
         const n = OPR_NAME[ins.a] || String(ins.a);
         const notes = {
-            RET:'程序/过程返回', NEG:'取负', ADD:'加', SUB:'减', MUL:'乘', DIV:'除',
-            MOD:'取模', ODD:'奇数测试',
-            EQL:'相等==', NEQ:'不等!=', LSS:'小于<', LEQ:'小于等于<=', GTR:'大于>', GEQ:'大于等于>=',
-            WRIT_BOOL:'输出布尔', WRIT_SET:'输出集合', READ:'读取输入', WRIT:'输出整数',
-            AND:'逻辑与', OR:'逻辑或', NOT:'逻辑非',
-            LT:'<', LE:'<=', GT:'>', GE:'>=', NE:'!=',
-            SET_MK:`构造集合(${ins.cnt}个元素)`, SET_ADD:'集合加元素', SET_REM:'集合删元素',
-            SET_UNI:'并集', SET_INT:'交集', SET_IN:'成员测试', SET_EMP:'空集测试', SET_EQ:'集合相等', SET_NE:'集合不等'
+            RET:'返回', NEG:'取负', ADD:'加', SUB:'减', MUL:'乘', DIV:'除', ODD:'奇测',
+            EQ:'==', NE:'!=', LT:'<', GE:'>=', GT:'>', LE:'<=',
+            WRITE:'写整数', WRITELN:'换行', READ:'读输入',
+            AND:'与', OR:'或', NOT:'非',
+            SET_MK:'构造集合', SET_UNION:'并集', SET_INTER:'交集',
+            SET_IN:'成员测试', SET_ISEMPTY:'空集测试', SET_ADD:'集合添加', SET_REMOVE:'集合删除',
+            SET_EQ:'集合相等', WRITE_BOOL:'写布尔', WRITE_SET:'写集合', SET_NE:'集合不等'
         };
         return `OPR.${n}：${notes[n]||''}`;
     }
@@ -1290,7 +849,6 @@ function highlightPCode(pc) {
 
 function updateStepInfo(vm) {
     document.getElementById('stepInfo').textContent = `PC: ${vm.p}  b: ${vm.b}  t: ${vm.t}`;
-    /* 显示栈顶最多 6 个元素 */
     const items = [];
     for (let i = Math.max(0, vm.t - 5); i <= vm.t; i++) {
         if (vm.setPool[i] !== undefined)
@@ -1309,22 +867,73 @@ function renderOutput(output) {
 
 function renderMemory(vm) {
     const el = document.getElementById('memoryArea');
-    el.innerHTML = '';
-    /* 显示当前活动记录（b 基址处）*/
-    if (vm.t < 0) { el.textContent = '（栈为空）'; return; }
-    let html = `<div class="mem-scope"><div class="mem-scope-title">当前帧 b=${vm.b}, t=${vm.t}</div>`;
-    html += `<div class="mem-var"><span class="mem-name">SL</span><span class="mem-type">link</span><span class="mem-value">${vm.s[vm.b]}</span></div>`;
-    html += `<div class="mem-var"><span class="mem-name">DL</span><span class="mem-type">link</span><span class="mem-value">${vm.s[vm.b+1]}</span></div>`;
-    html += `<div class="mem-var"><span class="mem-name">RA</span><span class="mem-type">addr</span><span class="mem-value">${vm.s[vm.b+2]}</span></div>`;
-    for (let i = vm.b + 3; i <= vm.t; i++) {
-        let valStr;
-        if (vm.setPool[i] !== undefined)
-            valStr = '{' + [...vm.setPool[i]].sort((a,b)=>a-b).join(', ') + '}';
-        else
-            valStr = String(vm.s[i]);
-        html += `<div class="mem-var"><span class="mem-name">s[${i}]</span><span class="mem-type">var</span><span class="mem-value">${escHtml(valStr)}</span></div>`;
+    if (vm.t < 0) { el.innerHTML = '<div style="color:#6c7086;font-size:12px;">（栈为空）</div>'; return; }
+
+    /* 从当前 b 沿静态链向上，收集所有帧 */
+    const frames = [];
+    let curB = vm.b;
+    while (true) {
+        const prevB = vm.s[curB];
+        frames.push(curB);
+        if (prevB === 0 || prevB >= curB) break; /* 到达最外层或异常 */
+        curB = prevB;
     }
-    html += '</div>';
+
+    /* 从外到内渲染（frames 是内到外，反转） */
+    frames.reverse();
+    let html = '';
+    const lastIdx = frames.length - 1;
+
+    for (let fi = 0; fi < frames.length; fi++) {
+        const fb = frames[fi];
+        const isCurrent = (fi === lastIdx);
+        /* 帧范围：[fb, nextB-1] 或 [fb, t] */
+        const nextB = (fi < lastIdx) ? frames[fi+1] : (vm.t + 1);
+        const sl = vm.s[fb];
+        const dl = vm.s[fb+1];
+        const ra = vm.s[fb+2];
+
+        html += `<div class="stack-frame${isCurrent ? ' current' : ''}">`;
+        html += `<div class="frame-header">`;
+        html += `<span>Level ${fi} — b=${fb}</span>`;
+        html += `<span class="frame-badge">${isCurrent ? '● 当前帧' : '外层帧'}</span>`;
+        html += `</div>`;
+
+        html += `<div class="frame-body">`;
+        /* 联系单元 */
+        html += `<div class="frame-row link"><span class="frame-slot">s[${fb}]</span><span class="frame-label sl">SL</span><span class="frame-value">link → ${sl}</span></div>`;
+        html += `<div class="frame-row link"><span class="frame-slot">s[${fb+1}]</span><span class="frame-label dl">DL</span><span class="frame-value">link → ${dl}</span></div>`;
+        html += `<div class="frame-row link"><span class="frame-slot">s[${fb+2}]</span><span class="frame-label ra">RA</span><span class="frame-value">addr ${ra}</span></div>`;
+
+        /* 局部变量 */
+        let varIdx = 0;
+        for (let i = fb + 3; i < nextB; i++) {
+            let valStr, setClass = '';
+            if (vm.setPool[i] !== undefined) {
+                valStr = '{' + [...vm.setPool[i]].sort((a,b)=>a-b).join(', ') + '}';
+                setClass = ' set';
+            } else {
+                valStr = String(vm.s[i]);
+            }
+            html += `<div class="frame-row"><span class="frame-slot">s[${i}]</span><span class="frame-label">var${varIdx}</span><span class="frame-value${setClass}">${escHtml(valStr)}</span></div>`;
+            varIdx++;
+        }
+        if (fb + 3 >= nextB) {
+            html += `<div style="color:#6c7086;font-size:10px;padding:2px 8px;">（无局部变量）</div>`;
+        }
+        html += `</div></div>`;
+    }
+
+    /* 栈底到第一个帧之间是全局区 */
+    const globalEnd = frames[0] || 0;
+    if (globalEnd > 0) {
+        html = `<div class="stack-frame"><div class="frame-header"><span>全局区 s[0..${globalEnd-1}]</span><span class="frame-badge">系统区</span></div><div class="frame-body">` +
+            `<div class="frame-row"><span class="frame-slot">s[0]</span><span class="frame-label sl">SL</span><span class="frame-value">${vm.s[0]}</span></div>` +
+            `<div class="frame-row"><span class="frame-slot">s[1]</span><span class="frame-label dl">DL</span><span class="frame-value">${vm.s[1]}</span></div>` +
+            `<div class="frame-row"><span class="frame-slot">s[2]</span><span class="frame-label ra">RA</span><span class="frame-value">${vm.s[2]}</span></div>` +
+            `</div></div>` + html;
+    }
+
     el.innerHTML = html;
 }
 
@@ -1333,7 +942,7 @@ let inputResolve = null;
 function promptInput(hint) {
     return new Promise(resolve => {
         inputResolve = resolve;
-        document.getElementById('inputPrompt').textContent = `程序执行到 read 语句，请输入整数值：`;
+        document.getElementById('inputPrompt').textContent = '程序执行到 read 语句，请输入整数值：';
         document.getElementById('inputVal').value = '';
         document.getElementById('inputOverlay').classList.add('show');
         document.getElementById('inputVal').focus();
@@ -1351,6 +960,7 @@ document.getElementById('inputVal').addEventListener('keydown', e => {
 function escHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+
 </script>
 </body>
 </html>
