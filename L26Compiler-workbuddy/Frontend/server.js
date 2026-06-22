@@ -1,6 +1,4 @@
 // L26 编译器桥接服务器
-// 启动: node server.js
-// 浏览器打开 http://localhost:8765 即可使用
 
 const http = require('http');
 const { execSync } = require('child_process');
@@ -23,12 +21,12 @@ http.createServer((req, res) => {
         return;
     }
 
-    // 首页：直接提供 index.html，前端就在本地
+    // 首页
     if (req.method === 'GET' && (req.url === '/' || req.url === '')) {
         fs.readFile(INDEX_HTML, 'utf-8', (err, data) => {
             if (err) {
                 res.writeHead(500);
-                res.end('无法加载 index.html');
+                res.end('无法加载html');
             } else {
                 res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
                 res.end(data);
@@ -37,7 +35,7 @@ http.createServer((req, res) => {
         return;
     }
 
-    // 编译接口：前端 POST 源码，后端返回 JSON
+    // 编译接口
     if (req.method === 'POST' && req.url === '/compile') {
         let body = '';
         req.on('data', chunk => body += chunk);

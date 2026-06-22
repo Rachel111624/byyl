@@ -1,0 +1,28 @@
+/*
+  错误测试：类型不匹配
+  预期错误："赋值类型不匹配"
+*/
+{
+    int a;
+    bool b;
+    set s;
+
+    a = 10;       // OK: int = int
+    b = true;     // OK: bool = bool
+    s = {1, 2};   // OK: set = set
+
+    // 错误1：int 变量赋 bool 值
+    a = true;     // ERROR: 赋值类型不匹配
+
+    // 错误2：bool 变量赋 int 值
+    b = 42;       // ERROR: 赋值类型不匹配
+
+    // 错误3：bool 变量赋 set 值
+    b = {};       // ERROR: 赋值类型不匹配
+
+    // 错误4：set 变量赋 bool 值
+    s = false;    // ERROR: 赋值类型不匹配
+
+    // 错误5：int 变量赋 set 值
+    a = {1, 2};   // ERROR: 赋值类型不匹配
+}

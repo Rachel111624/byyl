@@ -1,0 +1,70 @@
+/*
+  集合高级测试：空集、多重 union/inter、add/remove 循环、in 成员测试
+*/
+{
+    set empty;
+    set s1;
+    set s2;
+    set s3;
+    int elem;
+    bool found;
+    bool allCleared;
+
+    // 空集合
+    empty = {};
+    write empty;
+
+    // 初始集合
+    s1 = {10, 20, 30};
+    s2 = {30, 40, 50};
+
+    // 三重 union
+    s3 = s1 union s2;
+    write s3;
+
+    // union 后 inter
+    s3 = s3 inter s2;
+    write s3;
+
+    // 链式：集合间连续运算
+    s1 = {1, 2, 3};
+    s2 = {3, 4, 5};
+    s3 = s1 union s2;
+    s3 = s3 inter s1;
+    write s3;
+
+    // add 逐个构建集合
+    s1 = {};
+    add s1 100;
+    add s1 200;
+    add s1 300;
+    write s1;
+
+    // remove 逐个清空集合
+    remove s1 100;
+    remove s1 200;
+    remove s1 300;
+    write s1;
+
+    // in 成员测试
+    s1 = {1, 2, 3, 4, 5};
+    found = 3 in s1;
+    write found;
+    found = 99 in s1;
+    write found;
+
+    // isempty 测试
+    allCleared = isempty(empty);
+    write allCleared;
+    allCleared = isempty(s1);
+    write allCleared;
+
+    // while 中用 add 构建集合
+    elem = 5;
+    s1 = {};
+    while (elem > 0) {
+        add s1 elem;
+        elem = elem - 1;
+    }
+    write s1;
+}

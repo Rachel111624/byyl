@@ -1,7 +1,6 @@
 /* ============================================================
    VM.h  —  类 P-Code 虚拟机（L26 运行时执行引擎）
    栈式机模型：s[]栈 + 四个寄存器 p/b/t
-   对标 Pcode.md §一、§四
    ============================================================ */
 #ifndef L26_VM_H__
 #define L26_VM_H__
@@ -17,7 +16,7 @@ namespace L26Project {
 
 #define STACKSIZE     2048
 #define CXMAX         1024
-#define MAX_SET_SIZE  200   /* PDF 要求：集合元素上限 200 */
+#define MAX_SET_SIZE  200   /* 集合元素上限 200 */
 
 /* 集合辅助池（s[] 只存 int，set 类型额外存在此处） */
 static std::set<int> g_setPool[STACKSIZE];

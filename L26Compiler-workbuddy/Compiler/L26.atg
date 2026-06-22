@@ -2,7 +2,7 @@
   L26.atg  —  Coco/R ATG 文法文件
   L26 语言编译器（第三组：Coco/R 实现）
   生成：Scanner.cpp / Scanner.h / Parser.cpp / Parser.h
-  P-Code 格式：f l a（对标 Pcode.md 三字段标准）
+  P-Code 格式：f l a
 
   compile with:
     coco.exe L26.atg -namespace L26Project
@@ -47,10 +47,9 @@ $namespace=L26Project
         7="bool" 8="set"     9="="  10="if" 11="("  12=")"
        13="else" 14="while" 15="write" 16="read" 17="add" 18="remove"
        19="<"  20="<="      21=">"   22=">="  23="=="  24="!="
-       25="in"
-       26="||"  27="&&"     28="true" 29="false" 30="!"
-       31="+"   32="-"      33="*"   34="/"   35=","   36="union"
-       37="inter" 38="isempty"
+       25="in"  26="union" 27="inter" 28="||" 29="&&"
+       30="true" 31="false" 32="!"   33="isempty"
+       34="+"   35="-"     36="*"   37="/"  38=","
        ========================================================== */
 
     /* 前瞻谓词：是否是集合表达式起始
@@ -62,7 +61,7 @@ $namespace=L26Project
         if (la->kind == 3) return true;
         if (la->kind == _ident && la->next != NULL) {
             int nk = la->next->kind;
-            if (nk == 36 || nk == 37) return true;
+            if (nk == 26 || nk == 27) return true;
         }
         return false;
     }
@@ -75,13 +74,13 @@ $namespace=L26Project
      */
     bool IsAExprStart() {
         int k = la->kind;
-        if (!(k == _ident || k == _number || k == 32 /* "-" */ || k == 11 /* "(" */))
+        if (!(k == _ident || k == _number || k == 35 /* "-" */ || k == 11 /* "(" */))
             return false;
         /* 检查 la->next：若使表达式变为 bool/set，则不算纯 AExpr */
         if (la->next != NULL) {
             int nk = la->next->kind;
-            /* "in"(37) "union"(35) "inter"(36) "&&"(30) "||"(29) */
-            if (nk == 25 || nk == 36 || nk == 37 || nk == 27 || nk == 26)
+            /* "in"(25) "union"(26) "inter"(27) "&&"(29) "||"(28) */
+            if (nk == 25 || nk == 26 || nk == 27 || nk == 28 || nk == 29)
                 return false;
         }
         return true;
@@ -94,9 +93,9 @@ $namespace=L26Project
     bool IsBExprOnly() {
         int k = la->kind;
         /* true / false / ! */
-        if (k == 28 || k == 29 || k == 30) return true;
+        if (k == 30 || k == 31 || k == 32) return true;
         /* AExpr 后接关系运算符或 "in" → 关系表达式/成员测试 */
-        if (k == _ident || k == _number || k == 32 || k == 11) {
+        if (k == _ident || k == _number || k == 35 || k == 11) {
             if (la->next != NULL) {
                 int nk = la->next->kind;
                 /* 关系运算符: 19-24, 或 "in": 25 */
@@ -111,9 +110,9 @@ $namespace=L26Project
          AExpr "in" ident → la 能启动 AExpr 且 la->next 是 "in"(25)
      */
     bool IsSetTest() {
-        if (la->kind == 38) return true;
+        if (la->kind == 33) return true;
         int k = la->kind;
-        if (k == _ident || k == _number || k == 32 || k == 11) {
+        if (k == _ident || k == _number || k == 35 || k == 11) {
             if (la->next != NULL && la->next->kind == 25) return true;
         }
         return false;

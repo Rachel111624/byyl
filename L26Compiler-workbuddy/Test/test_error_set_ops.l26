@@ -1,0 +1,36 @@
+/*
+  错误测试：集合操作的类型错误
+  预期错误：add/remove/in/union/inter/isempty 目标或参数类型错误
+*/
+{
+    int n;
+    bool b;
+    set s;
+    set t;
+
+    n = 10;
+    b = true;
+    s = {1, 2};
+    t = {3, 4};
+
+    // 错误1：add 到非 set 变量
+    add n 5;          // ERROR: add 目标必须是 set 类型
+
+    // 错误2：add 到 bool 变量
+    add b 5;          // ERROR: add 目标必须是 set 类型
+
+    // 错误3：remove 从非 set 变量
+    remove n 3;       // ERROR: remove 目标必须是 set 类型
+
+    // 错误4：union 右侧不是 set
+    s = s union n;    // ERROR: union 右侧必须是 set
+
+    // 错误5：inter 右侧不是 set
+    s = s inter b;    // ERROR: inter 右侧必须是 set
+
+    // 错误6：in 右侧不是 set
+    b = n in n;       // ERROR: in 右侧必须是 set
+
+    // 错误7：isempty 参数不是 set
+    b = isempty(n);   // ERROR: isempty 参数必须是 set
+}

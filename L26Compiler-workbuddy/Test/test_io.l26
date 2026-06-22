@@ -1,0 +1,42 @@
+/*
+  I/O 综合测试：write int/bool/set, read
+*/
+{
+    int a;
+    int b;
+    bool flag;
+    set s;
+    set t;
+
+    // write int
+    a = 42;
+    write a;
+
+    // write bool
+    flag = true;
+    write flag;
+    flag = false;
+    write flag;
+
+    // write set
+    s = {1, 2, 3};
+    write s;
+
+    // read int
+    read a;
+    write a;
+
+    // read + 运算后 write
+    read b;
+    a = a + b;
+    write a;
+
+    // write 集合运算结果
+    t = {4, 5};
+    s = s union t;
+    write s;
+
+    // write 比较结果
+    flag = a > b;
+    write flag;
+}

@@ -1,0 +1,52 @@
+/*
+  控制流综合测试：if-else、嵌套 while、复杂布尔表达式
+*/
+{
+    int x;
+    int y;
+    int sum;
+    bool flag;
+    bool done;
+
+    x = 10;
+    y = 5;
+
+    // if-else 分支
+    if (x > y) {
+        write x;
+    } else {
+        write y;
+    }
+
+    // 复杂布尔条件：&& 和 || 组合
+    if ((x > 0) && (y > 0)) {
+        sum = x + y;
+        write sum;
+    }
+
+    // 嵌套 if
+    if (x > y) {
+        if (x > 0) {
+            write x;
+        }
+    }
+
+    // while 循环累加
+    sum = 0;
+    x = 5;
+    while (x > 0) {
+        sum = sum + x;
+        x = x - 1;
+    }
+    write sum;
+
+    // 逻辑非 ! 的使用
+    flag = true;
+    done = !flag;
+    write done;
+
+    // 复杂条件：!(A || B) 等价于 !A && !B
+    if (!((x > 10) || (y > 10))) {
+        write 0;
+    }
+}

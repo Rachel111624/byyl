@@ -6,7 +6,7 @@
     <title>L26 编译器可视化前端</title>
     <style>
         /* ====================================================
-           全局样式 — 简洁清晰，对标参考项目风格
+           全局样式
         ==================================================== */
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -292,7 +292,7 @@
         #inputDialog input:focus { outline: 2px solid #89b4fa; }
         .dialog-btns { display: flex; gap: 8px; justify-content: flex-end; }
 
-        /* 滚动条美化 */
+        /* 滚动条 */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #181825; }
         ::-webkit-scrollbar-thumb { background: #45475a; border-radius: 3px; }
@@ -302,7 +302,7 @@
 
 <header>
     <h1>🔵 L26 编译器可视化</h1>
-    <span>Coco/R 实现 · 第三组 · 词法 → 语法 → P-Code → 虚拟机</span>
+    <span>Coco/R 实现 · 第三组</span>
 </header>
 
 <!-- 控制栏 -->
@@ -341,7 +341,7 @@
         </div>
     </div>
 
-    <!-- 第三行：P-Code | Token（各占一半，min-height:0 防撑开） -->
+    <!-- 第三行：P-Code | Token -->
     <div style="grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:10px;min-height:0;overflow:hidden">
         <div class="panel">
             <div class="panel-title"><span class="dot" style="background:#f9e2af;"></span>P-Code 指令序列</div>
@@ -369,7 +369,7 @@
     </div>
 </div>
 
-<!-- 输入弹窗（模拟 read 语句） -->
+<!-- 输入弹窗 -->
 <div id="inputOverlay">
     <div id="inputDialog">
         <h3>📥 程序需要输入</h3>

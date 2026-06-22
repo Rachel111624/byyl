@@ -1,0 +1,36 @@
+/*
+  算术综合测试：所有运算符、负数、括号嵌套、除法
+*/
+{
+    int a;
+    int b;
+    int c;
+    int d;
+    int e;
+
+    // 基本四则运算
+    a = 10 + 5;
+    write a;
+    b = 20 - 8;
+    write b;
+    c = 6 * 7;
+    write c;
+    d = 100 / 4;
+    write d;
+
+    // 负数（一元负号）
+    e = -a;
+    write e;
+
+    // 括号嵌套
+    e = (a + b) * (c - d);
+    write e;
+
+    // 复杂表达式：运算符优先级
+    e = a + b * c - d / 2;
+    write e;
+
+    // 多层括号
+    e = ((a + 1) * (b - 2)) + ((c / 3) - d);
+    write e;
+}

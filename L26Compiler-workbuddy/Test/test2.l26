@@ -1,0 +1,14 @@
+{
+    int x;
+    set s;
+    x = 10;
+    s = {1, 2};
+    {
+        set x;
+        x = {5, 6};
+        add x 7;
+        write x;
+        write s;
+    }
+    write x;
+}
